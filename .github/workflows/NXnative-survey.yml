@@ -99,26 +99,31 @@ jobs:
           WORK="$RUNNER_TEMP/captain-toad"
           GAME_DIR="$RUNNER_TEMP/CaptainToad"
           mkdir -p "$GAME_DIR"
-          extract_single_nsp() {
+          extract_nsps() {
             local archive="$1"
-            local destination="$2"
-            local label="$3"
+            local label="$2"
+            local expected="$3"
             local extract_dir="$WORK/extracted-$label"
             mkdir -p "$extract_dir"
             echo "Extracting $label archive..."
             unar -o "$extract_dir" "$archive"
-            python - "$extract_dir" "$destination" "$label" <<'PY'
+            python - "$extract_dir" "$GAME_DIR" "$label" "$expected" <<'PY'
           import shutil
           import sys
           from pathlib import Path
           root = Path(sys.argv[1])
           destination = Path(sys.argv[2])
           label = sys.argv[3]
+          expected = sys.argv[4]
           files = sorted(
               p for p in root.rglob("*")
               if p.is_file() and p.suffix.lower() == ".nsp"
           )
-          if len(files) != 1:
+          if not files:
+              raise SystemExit(
+                  f"No NSP files found in the {label} archive."
+              )
+          if expected == "one" and len(files) != 1:
               print(
                   f"Expected exactly one NSP in the {label} "
                   f"archive, but found {len(files)}."
@@ -126,34 +131,44 @@ jobs:
               for path in files:
                   print(f"Found: {path.relative_to(root)}")
               raise SystemExit(1)
-          source = files[0]
-          with source.open("rb") as f:
-              magic = f.read(4)
-          if magic != b"PFS0":
+          if expected == "multiple" and len(files) < 1:
               raise SystemExit(
-                  f"The extracted {label} file does not start "
-                  "with the expected PFS0 signature."
+                  f"No DLC NSP files found in the {label} archive."
               )
-          shutil.copy2(source, destination)
-          print(
-              f"{label}: validated and copied "
-              f"({source.stat().st_size:,} bytes)"
-          )
+          for source in files:
+              with source.open("rb") as f:
+                  magic = f.read(4)
+              if magic != b"PFS0":
+                  raise SystemExit(
+                      f"{source.name} from the {label} archive "
+                      "does not start with the expected PFS0 signature."
+                  )
+              target = destination / source.name
+              if target.exists():
+                  raise SystemExit(
+                      f"Duplicate NSP filename would overwrite an "
+                      f"existing file: {source.name}"
+                  )
+              shutil.copy2(source, target)
+              print(
+                  f"{label}: validated and copied {source.name} "
+                  f"({source.stat().st_size:,} bytes)"
+              )
           PY
           }
-          extract_single_nsp \
+          extract_nsps \
             "$WORK/base.rar" \
-            "$GAME_DIR/base.nsp" \
-            "base game"
-          extract_single_nsp \
+            "base" \
+            "one"
+          extract_nsps \
             "$WORK/update.rar" \
-            "$GAME_DIR/update.nsp" \
-            "update"
+            "update" \
+            "one"
           if [[ -f "$WORK/dlc.rar" ]]; then
-            extract_single_nsp \
+            extract_nsps \
               "$WORK/dlc.rar" \
-              "$GAME_DIR/dlc.nsp" \
-              "DLC"
+              "dlc" \
+              "multiple"
           fi
           echo "=== Prepared game files ==="
           ls -lh "$GAME_DIR"
