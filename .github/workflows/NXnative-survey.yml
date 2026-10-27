@@ -32,9 +32,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           brew install xcodegen zstd spirv-cross
-
           python -m pip install --upgrade pip
           python -m pip install \
             lz4 capstone fonttools backports.zstd gdown
@@ -47,20 +45,56 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           WORK="$RUNNER_TEMP/parabox"
           mkdir -p "$WORK"
 
           download_file() {
             local url="$1"
             local output="$2"
+            local file_id
 
             if [[ -z "$url" ]]; then
               echo "::error::A required URL secret is empty."
               exit 1
             fi
 
-            gdown --fuzzy "$url" -O "$output"
+            file_id="$(python - "$url" <<'PY'
+          import re
+          import sys
+          from urllib.parse import urlparse, parse_qs
+
+          url = sys.argv[1].strip()
+          parsed = urlparse(url)
+          query = parse_qs(parsed.query)
+          file_id = None
+
+          if parsed.netloc.lower() in (
+              "drive.google.com",
+              "www.drive.google.com",
+          ):
+              match = re.search(r"/file/d/([^/]+)", parsed.path)
+              if match:
+                  file_id = match.group(1)
+              elif query.get("id"):
+                  file_id = query["id"][0]
+
+          if not file_id and re.fullmatch(
+              r"[-A-Za-z0-9_]{20,}", url
+          ):
+              file_id = url
+
+          if not file_id:
+              raise SystemExit(
+                  "Could not extract a Google Drive file ID "
+                  "from the supplied URL."
+              )
+
+          print(file_id)
+          PY
+            )"
+
+            echo "Downloading $(basename "$output") from Google Drive..."
+            gdown "$file_id" -O "$output"
 
             if [[ ! -s "$output" ]]; then
               echo "::error::Downloaded file is empty: $(basename "$output")"
@@ -72,7 +106,6 @@ jobs:
           download_file "$UPDATE_URL" "$WORK/update.nsp"
           download_file "$KEYS_URL" "$WORK/prod.keys"
 
-          # Validate both downloads as NSP containers.
           python - "$WORK" <<'PY'
           import sys
           from pathlib import Path
@@ -86,15 +119,17 @@ jobs:
 
               if magic != b"PFS0":
                   raise SystemExit(
-                      f"{name} is not a valid NSP container "
-                      "(check the Google Drive link and permissions)."
+                      f"{name} is not a valid NSP container. "
+                      "Check the Google Drive link, permissions, "
+                      "and downloaded file."
                   )
 
               print(f"{name}: NSP container verified")
 
           keys = folder / "prod.keys"
+
           if keys.stat().st_size == 0:
-              raise SystemExit("The downloaded keys file is empty.")
+              raise SystemExit("The keys file is empty.")
 
           print("Keys file downloaded; contents not displayed.")
           PY
@@ -105,14 +140,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           WORK="$RUNNER_TEMP/parabox"
           GAME_DIR="$RUNNER_TEMP/Parabox"
 
           mkdir -p "$GAME_DIR"
-
-          # Local filenames are temporary. Google Drive filenames
-          # do not need to be changed.
           cp "$WORK/base.nsp" "$GAME_DIR/base.nsp"
           cp "$WORK/update.nsp" "$GAME_DIR/update.nsp"
 
