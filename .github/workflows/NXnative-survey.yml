@@ -148,6 +148,8 @@ jobs:
           mv "$WORK/update.nsp" "$GAME_DIR/update.nsp"
 
       - name: Update shader toolchain lock
+        env:
+          DM_GAME: "0100E44016C22000"
         shell: bash
         run: |
           set -euo pipefail
@@ -159,10 +161,11 @@ jobs:
             exit 1
           fi
 
-          echo "Updating shader toolchain lock using $CHAIN_SCRIPT"
           python "$CHAIN_SCRIPT" --update-lock
 
       - name: Build IPA with base game and update
+        env:
+          DM_GAME: "0100E44016C22000"
         shell: bash
         run: |
           set -euo pipefail
