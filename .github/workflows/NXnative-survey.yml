@@ -147,7 +147,7 @@ jobs:
           mv "$WORK/base.nsp" "$GAME_DIR/base.nsp"
           mv "$WORK/update.nsp" "$GAME_DIR/update.nsp"
 
-      - name: Update shader toolchain lock
+      - name: Update shader toolchain lock and header
         env:
           DM_GAME: "0100E44016C22000"
         shell: bash
@@ -162,6 +162,7 @@ jobs:
           fi
 
           python "$CHAIN_SCRIPT" --update-lock
+          python "$CHAIN_SCRIPT" --header
 
       - name: Build IPA with base game and update
         env:
