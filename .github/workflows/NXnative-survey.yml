@@ -147,6 +147,21 @@ jobs:
           mv "$WORK/base.nsp" "$GAME_DIR/base.nsp"
           mv "$WORK/update.nsp" "$GAME_DIR/update.nsp"
 
+      - name: Update shader toolchain lock
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CHAIN_SCRIPT="$(find . -name dmsh_chain.py -type f -print -quit)"
+
+          if [[ -z "$CHAIN_SCRIPT" ]]; then
+            echo "::error::Could not find dmsh_chain.py"
+            exit 1
+          fi
+
+          echo "Updating shader toolchain lock using $CHAIN_SCRIPT"
+          python "$CHAIN_SCRIPT" --update-lock
+
       - name: Build IPA with base game and update
         shell: bash
         run: |
