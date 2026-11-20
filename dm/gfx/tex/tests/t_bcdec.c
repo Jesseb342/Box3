@@ -14,6 +14,8 @@ int main(void) {
     CHECK(nvn_bc_soft_unpacked(0x4e,&pf,&bpp)&&pf==ASTC4_S&&bpp==4,"sRGB BC7 ASTC target");
     CHECK(nvn_bc_soft_unpacked(0x50,&pf,&bpp)&&pf==RG11B10F&&bpp==4,"unsigned BC6H packed target");
     CHECK(nvn_bc_soft_unpacked(0x4f,&pf,&bpp)&&pf==RGBA16F&&bpp==8,"signed BC6H target");
+    CHECK(nvn_bc_unpacked(0x4d,&pf,&bpp)&&pf==RGBA8&&bpp==4,"legacy BC7 RGBA path remains for 3D");
+    CHECK(nvn_bc_unpacked(0x50,&pf,&bpp)&&pf==RGBA16F&&bpp==8,"legacy BC6H RGBA path remains for 3D");
     CHECK(bc_soft_out_block(BC7,block,ref,16)==0,"reference BC7 ASTC block");
     CHECK(nvn_bc_soft_decode(0x4d,block,16,4,4,out,16)==0&&!memcmp(out,ref,16),"NVN BC7 decoder produces ASTC block");
     memset(out,0xa5,sizeof out);
