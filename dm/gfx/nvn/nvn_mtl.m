@@ -9198,8 +9198,8 @@ static void copy_b2t(const p_copy_b2t *c) {
     uint32_t upf; int ubpp;
     uint32_t bcs = is3d ? 0 : (no_bc() ? nvn_bc_mtl_pf(c->tex->d.format) : 0);
     if (bcs) {
-        uint32_t upf; int ubpp;
-        if (nvn_bc_soft_unpacked(c->tex->d.format, &upf, &ubpp)) {
+        int ubpp;
+        if (nvn_bc_soft_unpacked(c->tex->d.format, NULL, &ubpp)) {
             const uint8_t *src = [(__bridge id<MTLBuffer>)mb contents];
             if (!src) { RED_ONCE(49, "BC soft: the CPU cannot read the source buffer of a buffer→texture copy"); return; }
             size_t up = (size_t)((c->r.width + 3) / 4) * 4 * ubpp;
