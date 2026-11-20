@@ -1,0 +1,48 @@
+name: Inspect Nusa beta package
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Branch containing the Nusa beta package
+        required: true
+        type: choice
+        options:
+          - no-bc
+          - bc-soft-integration
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout selected source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref }}
+      - name: Inspect Nusa beta archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARCHIVE="NusaNX-0.1.1-beta.zip"
+          test -s "$ARCHIVE" || { echo "::error::Nusa beta archive not present on selected ref"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/nusa-inspection"
+          file "$ARCHIVE" | tee "$RUNNER_TEMP/nusa-inspection/file-type.txt"
+          unzip -t "$ARCHIVE" | tee "$RUNNER_TEMP/nusa-inspection/zip-test.txt"
+          unzip -l "$ARCHIVE" | tee "$RUNNER_TEMP/nusa-inspection/archive-list.txt"
+          unzip -q "$ARCHIVE" -d "$RUNNER_TEMP/nusa-inspection/unpacked"
+          find "$RUNNER_TEMP/nusa-inspection/unpacked" -maxdepth 5 -type f -print | sort > "$RUNNER_TEMP/nusa-inspection/files.txt"
+          echo "=== Candidate app/build sources ==="
+          grep -Ei '(project\.yml|\.xcodeproj|\.xcworkspace|Package\.swift|Info\.plist|\.swift$|\.m$|\.mm$|\.h$|\.sh$|\.yml$|\.yaml$)' "$RUNNER_TEMP/nusa-inspection/files.txt" | head -300 || true
+          echo "=== Nusa references ==="
+          grep -RilE 'NusaNX|Nusa|fileImporter|UIDocumentPicker|prod\.keys|NSP' "$RUNNER_TEMP/nusa-inspection/unpacked" --include='*.swift' --include='*.m' --include='*.h' --include='*.plist' --include='*.yml' --include='*.yaml' --include='*.sh' 2>/dev/null | head -200 > "$RUNNER_TEMP/nusa-inspection/nusa-references.txt" || true
+          cat "$RUNNER_TEMP/nusa-inspection/nusa-references.txt"
+      - name: Upload inspection report
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nusa-beta-inspection
+          path: ${{ runner.temp }}/nusa-inspection/
+          if-no-files-found: error
+          retention-days: 7
