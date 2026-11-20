@@ -10,9 +10,9 @@ int main(void) {
     CHECK(nvn_bc_unpacked(0x50, &pf, &bpp) && pf == 92 && bpp == 4, "unsigned BC6H must map to R11G11B10F");
     CHECK(nvn_bc_unpacked(0x4f, &pf, &bpp) && pf == 115 && bpp == 8, "signed BC6H must remain RGBA16F");
     CHECK(nvn_bc_unpacked(0x4d, &pf, &bpp) && pf == 70 && bpp == 4, "BC7 fallback must remain RGBA8 when ASTC is disabled");
-    uint8_t zero[16] = {0}, out[64]; memset(out, 0xa5, sizeof out);
+    uint8_t zero[16] = {0}, out[128]; memset(out, 0xa5, sizeof out);
     CHECK(nvn_bc_decode(0x50, zero, 16, 4, 4, out, 16) == 0, "unsigned BC6H zero block decode failed");
-    int all_zero = 1; for (size_t i = 0; i < sizeof out; i++) all_zero &= out[i] == 0;
+    int all_zero = 1; for (size_t i = 0; i < 64; i++) all_zero &= out[i] == 0;
     CHECK(all_zero, "unsigned BC6H zero block did not produce packed black");
     uint8_t edge[36]; memset(edge, 0xa5, sizeof edge);
     CHECK(nvn_bc_decode(0x50, zero, 16, 3, 3, edge, 12) == 0, "unsigned BC6H partial-edge decode failed");

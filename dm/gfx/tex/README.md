@@ -36,10 +36,13 @@ The environment variable `DM_TEST_NO_BC=1` forces this path on any machine.
 ## Tests
 
 ```sh
-make -C dm/gfx/tex/tests run       # run t_fmt_mtl and t_tex
+make -C dm/gfx/tex/tests run                         # t_fmt_mtl, t_tex and t_bcdec
+make -C dm/gfx/tex/tests astc ASTCENC=/path/to/astcenc # BC1–3 and BC7 ASTC regression tests
 ```
 
 - **`t_fmt_mtl`**: takes the mapping for every NVN format in 0x01–0x9C and, for every one whose mapping is not 0, actually creates a texture on the local Metal device; all of them must be created successfully. It also checks that every NVN format with sRGB in its name lands on a Metal sRGB format. No game files needed.
+- **`t_bcdec`**: CPU decode checks for unsigned BC6H → R11G11B10F, signed BC6H → RGBA16F, BC7's RGBA8 fallback, and partial-edge blocks.
+- **`t_bc2astc`**: checks BC1–3 transcoding plus BC7 → ASTC decoding against Arm's `astcenc`; the BC7 test exercises all eight BC7 modes and reports measured PSNR.
 - **`t_tex`**: the deswizzling tests, in several groups:
 
   | Group | Criterion |
