@@ -22,6 +22,7 @@
 #include "nvn_mtl.h"
 #include "nvn_obj.h"
 #include "../tex/nvn_fmt_mtl.h"
+#include "../tex/bc_soft.h"
 #include "../tex/nvn_deswizzle.h"
 #include "../tex/nvn_deswizzle_gpu.h"
 #include "../tex/nvn_bcdec.h"
@@ -353,6 +354,12 @@ void mtl_init(void) {
     g_dev = MTLCreateSystemDefaultDevice();
     if (!g_dev) MDIE("no Metal device");
     if (!g_dev.hasUnifiedMemory) MDIE("needs a unified-memory device (zero-copy memory pools)");
+    const char *bc_soft_env = getenv("DM_BC_SOFT"), *bc_test_env = getenv("DM_TEST_NO_BC");
+    nvn_bc_soft = bc_soft_env && *bc_soft_env ? atoi(bc_soft_env) != 0 :
+        ((bc_test_env && *bc_test_env && strcmp(bc_test_env, "0")) || ![g_dev supportsBCTextureCompression]);
+    const char *bc_astc_env = getenv("DM_BC_ASTC");
+    nvn_bc_astc = !bc_astc_env || !*bc_astc_env ? 1 : atoi(bc_astc_env) != 0;
+    if (nvn_bc_soft) MLOG("BC6H/BC7 software fallback enabled (DM_BC_SOFT=%d, DM_BC_ASTC=%d; BC1–5 retain the existing fallback)", nvn_bc_soft, nvn_bc_astc);
     g_q = [g_dev newCommandQueue];
     // A device without Metal 4 (the paravirtualized GPU of a virtual Mac, such as GitHub's macos-26 runner: no residency set, no MTL4CommandQueue) cannot run the NVN layer. The GL and
     // Vulkan layers draw on classic queues of their own and need only the device (mtl_device_classic): there the classic part starts and presents are dropped, which is all a
@@ -1708,23 +1715,21 @@ static int pkg_edges_clean(NvPkg *pk, const tex_t *t) {   // the covered pages w
     pk->stamp = st; g_pkg_edge_skips++;
     return 1;
 }
-// The GPU does not support BC compressed formats (A15 / A16 etc.): BC textures are created in the decompressed format and decompressed on the CPU at upload / buffer→texture copy time (nvn_bcdec.c).
-// (d2r-mobile converted most of its textures to ASTC offline with a supplementary pack; that tool is not part of this repository, so here every BC texture takes this path). The test switch DM_TEST_NO_BC=1 forces this path on any machine
-static int no_bc(void) {
-    static int v = -1;
-    if (v < 0) { const char *e = getenv("DM_TEST_NO_BC"); v = (e && *e && strcmp(e, "0")) || ![g_dev supportsBCTextureCompression];
-        if (v) MLOG("the GPU has no BC compressed formats%s: BC textures are stored as ASTC 4x4 (BC1–3) or decompressed (see the DM_NO_BC_ASTC line)", e && *e && strcmp(e, "0") ? " (test switch DM_TEST_NO_BC)" : ""); }
-    return v;
+// BC1–5 keep the existing fallback. BC6H/BC7 use bc_soft.c on devices without native BC support.
+// DM_BC_SOFT overrides capability detection; DM_TEST_NO_BC remains the legacy force-on switch.
+static int no_bc(void) { return nvn_bc_soft; }
+static int bc_unpack(const tex_t *t, uint32_t nvn_fmt, uint32_t *pf, int *bpp) {
+    if (t && t->d.target != 2 && nvn_fmt_bc_soft(nvn_fmt)) return 0;
+    return no_bc() && nvn_bc_unpacked(nvn_fmt, pf, bpp);
 }
-static int bc_unpack(uint32_t nvn_fmt, uint32_t *pf, int *bpp) { return no_bc() && nvn_bc_unpacked(nvn_fmt, pf, bpp); }
-// No BC: BC1, BC2 and BC3 are stored as ASTC 4x4 (8 bits per texel, a quarter of RGBA8) by transcoding every BC block into one ASTC block at upload (nvn_bc2astc.h, bc2astc_core.h; GPU kernel `bca`). BC4 / BC5 / BC6H / BC7 and 3D textures stay decompressed.
+// No BC: BC1–3 may use ASTC 4x4; BC4/5 retain the existing GPU decode; BC6H/7 use bc_soft; 3D textures retain the existing decompressed fallback.
 // DM_NO_BC_ASTC=all (default) | bc1 (BC1 only) | 0 (everything decompressed to RGBA8, the A/B reference). BC3 alpha carries real data in some games and ASTC keeps four alpha levels per block (about 30 dB), so a game profile can list
 // the packaged BC3 textures that stay RGBA8 (dm/games/<id>/bc3_keep_rgba8.tsv, written by tests/bench_bc2astc_dread.c, keyed by nvn_texkey of their storage); DM_NO_BC_ASTC_KEEP=0 ignores the list (A/B)
 static int keep_on(void);
 static int astc_mode(void) {
     static int v = -1;
     if (v < 0) { const char *e = getenv("DM_NO_BC_ASTC"); v = !e || !*e || !strcmp(e, "all") ? 2 : (!strcmp(e, "bc1") ? 1 : (!strcmp(e, "0") ? 0 : 2));
-        MLOG("no BC: DM_NO_BC_ASTC=%s: %s%s", e && *e ? e : "(unset) all", v == 2 ? "BC1, BC2 and BC3 are stored as ASTC 4x4 (8 bits per texel), BC4 / BC5 / BC6H / BC7 and 3D textures decompressed" : v == 1 ? "BC1 is stored as ASTC 4x4, every other BC format decompressed" : "every BC format is decompressed to RGBA8 / R8 / RG8 / RGBA16F",
+        MLOG("no BC: DM_NO_BC_ASTC=%s: %s%s", e && *e ? e : "(unset) all", v == 2 ? "BC1–3 are stored as ASTC 4x4; BC4/5 keep the existing GPU decode; BC6H/7 use bc_soft" : v == 1 ? "BC1 is ASTC; BC2/3 use the legacy decoded path; BC4/5 use GPU decode; BC6H/7 use bc_soft" : "BC1–3 use the legacy decoded path; BC4/5 use GPU decode; BC6H/7 use bc_soft",
              v && !keep_on() ? " (DM_NO_BC_ASTC_KEEP=0: the BC3 keep table is ignored)" : ""); }
     return v;
 }
@@ -1769,7 +1774,10 @@ static int is_astc4(MTLPixelFormat f) { return f == MTLPixelFormatASTC_4x4_LDR |
 static MTLTextureDescriptor *tex_desc(const tex_t *t, int packaged) {
     uint32_t pf = 0; uint8_t swz[4];
     if (!nvn_fmt_to_mtl(t->d.format, &pf, swz) || !pf) { RED_ONCE(0, "texture format %#x has no Metal equivalent (first case)", t->d.format); return nil; }
-    int unp = 0, astc = 0; { uint32_t upf; int ubpp; if (bc_astc(t, &upf)) { pf = upf; astc = 1; } else if (bc_unpack(t->d.format, &upf, &ubpp)) { pf = upf; unp = 1; } }   // No BC: BC1–3 as ASTC 4x4, the rest created in the decompressed format
+    int unp = 0, astc = 0;
+    uint32_t bcs = nvn_fmt_bc_soft(t->d.format);
+    if (bcs && t->d.target != 2 && is_astc4((MTLPixelFormat)pf)) astc = 1;   // BC7's software target is ASTC when DM_BC_ASTC=1
+    { uint32_t upf; int ubpp; if (bc_astc(t, &upf)) { pf = upf; astc = 1; } else if (bc_unpack(t, t->d.format, &upf, &ubpp)) { pf = upf; unp = 1; } }
     // Metal's limits: 16384 in 2D, 2048 in 3D, 2048 array layers; beyond them Metal aborts the process on an assertion, so they are caught here with a red line
     if (t->d.width > 16384 || t->d.height > 16384 || t->d.depth > 2048) { RED_ONCE(71, "texture size exceeds Metal limits: %u×%u×%u levels %u format %#x target %d (first case ser=%llu)", t->d.width, t->d.height, t->d.depth, t->d.levels, t->d.format, t->d.target, (unsigned long long)t->serial); return nil; }
     MTLTextureDescriptor *d = [MTLTextureDescriptor new];
@@ -2218,24 +2226,29 @@ static id<MTLTexture> pkg_upload_(const tex_t *t, uint64_t *stamp, id<MTLTexture
         if (sparse) nvn_sparse_protect(t->pool, (uint64_t)(uintptr_t)t->mem, t->L.size); else nvn_dirty_protect(t->mem, t->L.size); }
     int bw, bh, bpb = nvn_fmt_bpb(t->d.format, &bw, &bh);
     unsigned layers = (t->d.target == 4 || t->d.target == 9) ? t->d.depth : t->d.target == 8 ? 6 : t->d.target == 3 ? t->d.height : 1;   // a cube array's depth counts layer-faces (tex_desc)
-    uint32_t upf; int ubpp = 0, unp = 0, astc = bc_astc(t, &upf);   // No BC: BC1–3 are transcoded to ASTC 4x4 after deswizzling; the other BC formats are decompressed (on the CPU, or BC4 / BC5 on the GPU)
-    if (!astc) unp = bc_unpack(t->d.format, &upf, &ubpp);
+    uint32_t upf; int ubpp = 0, unp = 0, astc = bc_astc(t, &upf);
+    uint32_t bcs = t->d.target == 2 ? 0 : nvn_fmt_bc_soft(t->d.format);
+    int obpp = 0; if (bcs) bc_soft_target(bcs, &obpp);
+    if (!astc) unp = bc_unpack(t, t->d.format, &upf, &ubpp);
     int akind = 0; if (astc) { uint32_t apf; nvn_bc_astc_fmt((uint32_t)t->d.format, &apf, &akind); }
     size_t total = 0;
     for (unsigned l = 0; l < d.mipmapLevelCount; l++) {
         uint32_t w = MAX(t->d.width >> l, 1u), h = MAX(t->d.height >> l, 1u), z = t->d.target == 2 ? MAX(t->d.depth >> l, 1u) : 1;
-        total += astc ? (size_t)((w + 3) / 4) * ((h + 3) / 4) * 16 * layers : unp ? (size_t)w * ubpp * h * z * layers : (size_t)((w + bw - 1) / bw) * bpb * ((h + bh - 1) / bh) * z * layers;
+        total += bcs ? (size_t)((w + 3) / 4) * 4 * obpp * bc_soft_rows(bcs, h) * z * layers :
+            astc ? (size_t)((w + 3) / 4) * ((h + 3) / 4) * 16 * layers :
+            unp ? (size_t)w * ubpp * h * z * layers :
+            (size_t)((w + bw - 1) / bw) * bpb * ((h + bh - 1) / bh) * z * layers;
     }
     g_bp_up_bytes += total;
     void *mb; uint64_t mo;
-    int gdec = unp && !sparse && t->d.target != 2 && bcd_fmt(t->d.format) && bcd_pso();   // BC1–5 without BC: GPU deswizzle + GPU decompression
-    int gast = astc && !sparse && bca_pso();   // BC1–3 as ASTC: GPU deswizzle + GPU transcoding
+    int gdec = !bcs && unp && !sparse && t->d.target != 2 && bcd_fmt(t->d.format) && bcd_pso();   // BC1–5 without BC: GPU deswizzle + GPU decompression
+    int gast = !bcs && astc && !sparse && bca_pso();   // BC1–3 as ASTC: GPU deswizzle + GPU transcoding
     size_t ctotal = 0, abase = 0, atotal = 0;   // Staging size of the compressed blocks (with GPU decompression / transcoding the staging area holds compressed blocks; the transcoded blocks follow at abase)
     if (gast) for (unsigned l = 0; l < d.mipmapLevelCount; l++) { uint32_t w = MAX(t->d.width >> l, 1u), h = MAX(t->d.height >> l, 1u); ctotal += (size_t)((w + bw - 1) / bw) * bpb * ((h + bh - 1) / bh) * layers; atotal += (size_t)((w + 3) / 4) * ((h + 3) / 4) * 16 * layers; }
     if (gast) abase = (ctotal + 255u) & ~(size_t)255u;
     if (gdec) for (unsigned l = 0; l < d.mipmapLevelCount; l++) { uint32_t w = MAX(t->d.width >> l, 1u), h = MAX(t->d.height >> l, 1u); ctotal += (size_t)((w + bw - 1) / bw) * bpb * ((h + bh - 1) / bh) * layers; }
-    int use_gpu = (astc ? gast : (!unp || gdec)) && !sparse && g_nvn_deswz_gpu && mtl_addr((uint64_t)t->mem, t->L.size, &mb, &mo);   // a sparse pool's texture is gathered through its page table on the CPU
-    if (g_nvn_deswz_gpu && !use_gpu && !sparse && !unp && !astc) RED_ONCE(40, "swizzled texture storage is not in a memory pool; falling back to the CPU");
+    int use_gpu = !bcs && (astc ? gast : (!unp || gdec)) && !sparse && g_nvn_deswz_gpu && mtl_addr((uint64_t)t->mem, t->L.size, &mb, &mo);   // a sparse pool's texture is gathered through its page table on the CPU
+    if (g_nvn_deswz_gpu && !use_gpu && !sparse && !unp && !astc && !bcs) RED_ONCE(40, "swizzled texture storage is not in a memory pool; falling back to the CPU");
     if (use_gpu) {
         // The GPU reads the memory pool at execution time, which is closer to a real Switch than a snapshot at CPU upload time; the dirty-page stamp is still taken before encoding, and later writes still trigger a re-upload.
         up_begin();
@@ -2295,6 +2308,21 @@ static id<MTLTexture> pkg_upload_(const tex_t *t, uint64_t *stamp, id<MTLTexture
         uint32_t w = MAX(t->d.width >> l, 1u), h = MAX(t->d.height >> l, 1u), z = t->d.target == 2 ? MAX(t->d.depth >> l, 1u) : 1;
         size_t pitch = (size_t)((w + bw - 1) / bw) * bpb, rows = (h + bh - 1) / bh;
         for (unsigned y = 0; y < layers; y++) {
+            if (bcs) {   // BC6H/BC7: decode compressed blocks into the format selected by bc_soft_target
+                const size_t dpitch = ((size_t)(w + 3) / 4) * 4 * (size_t)obpp;
+                const size_t drows = bc_soft_rows(bcs, h), dimg = dpitch * drows;
+                uint8_t *cb = malloc(pitch * rows * z);
+                if (!cb || nvn_deswizzle(&t->d, l, y, src, cb, pitch)) { free(cb); RED_ONCE(9, "BC soft deswizzle failed format %#x target %d", t->d.format, t->d.target); break; }
+                int bad = 0;
+                for (uint32_t zi = 0; zi < z; zi++)
+                    if (bc_soft_decode(bcs, cb + zi * pitch * rows, pitch, w, h,
+                                       (uint8_t *)stg.contents + off + zi * dimg, dpitch)) bad = 1;
+                free(cb);
+                if (bad) { RED_ONCE(9, "BC soft decode failed format %#x", t->d.format); break; }
+                up_blit_add(stg, off, dpitch, dimg, MTLSizeMake(w, h, z), mt, y, l);
+                off += dimg * z;
+                continue;
+            }
             if (astc) {   // No BC, CPU path (sparse pools, no GPU deswizzle): deswizzle into a temporary area, then transcode block by block into the staging area
                 uint8_t *cb = malloc(pitch * rows); size_t ap = (size_t)((w + 3) / 4) * 16;
                 if (!cb || nvn_deswizzle(&t->d, l, y, src, cb, pitch)) { free(cb); RED_ONCE(9, "deswizzle failed format %#x target %d", t->d.format, t->d.target); break; }
@@ -2619,7 +2647,10 @@ static id<MTLTexture> tex_mtl_(const tex_t *ct) {
         mt = [g_dev newTextureWithDescriptor:d];
         if (!mt) { RED_ONCE(2, "failed to create MTLTexture %ux%u format %#x target %d", t->d.width, t->d.height, t->d.format, t->d.target); return nil; }
         tex_tag_format(mt, t->d.format);
-        res_add(mt); if (!tex_init_fill(t, mt)) { uint32_t apf; tex_zero_fill(mt, bc_astc(t, &apf)); }   // register residency before filling (the copy destination must be resident too)
+        res_add(mt); if (!tex_init_fill(t, mt)) { uint32_t apf; int astc_zero = bc_astc(t, &apf);
+            uint32_t bcs = nvn_fmt_bc_soft(t->d.format);
+            if (bcs && t->d.target != 2 && is_astc4((MTLPixelFormat)bc_soft_target(bcs, NULL))) astc_zero = 1;
+            tex_zero_fill(mt, astc_zero); }   // register residency before filling (the copy destination must be resident too)
     }
     if (g_allocprof > 0) { static int n; if (n++ < 30 || n % 500 == 0) MLOG("new texture (%s) #%d ser=%llu %ux%ux%u format %#x target %d levels %u storage %p", __func__, n, (unsigned long long)t->serial, t->d.width, t->d.height, t->d.depth, t->d.format, t->d.target, t->d.levels, (void *)t->mem); }
     if (getenv("DM_NVN_TEXCPU") && t->pool && !(t->pool->flags & NVN_MEMORY_POOL_FLAGS_CPU_NO_ACCESS)) MLOG("non-swizzled texture on a CPU-visible pool ser=%llu %ux%ux%u format %#x target %d levels %u texture flags %#x pool flags %#x storage %p", (unsigned long long)t->serial, t->d.width, t->d.height, t->d.depth, t->d.format, t->d.target, t->d.levels, t->d.flags, t->pool->flags, (void *)t->mem);
@@ -2633,7 +2664,7 @@ static id<MTLTexture> tex_mtl_(const tex_t *ct) {
     return mt;
 }
 // Live textures by NVN source format and what they are stored as (the memory line's second line): the NVN format is attached to each MTLTexture the host creates for a game texture (tex_tag_format), the stored format is the Metal one.
-// Source classes: BC1 (0x41 / 0x42 / 0x45 / 0x46), BC2, BC3, BC4, BC5, BC7, BC6H, other formats; stored: native BC, ASTC 4x4 (BC1-3 on a GPU without BC), decompressed (R8 / RG8 / RGBA8 / RGBA16F), or the format itself. Textures made elsewhere (sparse, packaged) are not counted
+// Source classes: BC1, BC2, BC3, BC4, BC5, BC7, BC6H, other formats; stored: native BC, ASTC 4x4 (BC1–3 and BC7), decoded (R8 / RG8 / RGBA8 / R11G11B10F / RGBA16F), or the format itself. Textures made elsewhere (sparse, packaged) are not counted
 static const void *const k_tex_fmt_key = &k_tex_fmt_key;
 static void tex_tag_format(id<MTLTexture> mt, uint32_t nvn_fmt) { objc_setAssociatedObject(mt, k_tex_fmt_key, @(nvn_fmt), OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
 static int tex_src_class(uint32_t f) {   // 0 non-BC, 1 BC1, 2 BC2, 3 BC3, 4 BC4, 5 BC5, 6 BC6H, 7 BC7
@@ -4152,7 +4183,7 @@ static id<MTLTexture> tex_by_id(int tid) {   // Caller holds g_rmu
         if (r.v.set_format && !(nvn_fmt_to_mtl(r.v.format, &pf, swz) && pf)) pf = (uint32_t)base.pixelFormat;
         { uint32_t upf; int ubpp, vk;   // No BC: a BC view is switched to the format of its base texture: the matching ASTC 4x4 (LDR / sRGB) when the base is stored as ASTC, else the decompressed format
           if (r.v.set_format && is_astc4(base.pixelFormat) && nvn_bc_astc_fmt((uint32_t)r.v.format, &upf, &vk)) pf = upf;
-          else if (r.v.set_format && bc_unpack(r.v.format, &upf, &ubpp)) pf = upf; }
+          else if (r.v.set_format && bc_unpack(&rp->t, r.v.format, &upf, &ubpp)) pf = upf; }
         if (stv) pf = MTLPixelFormatX32_Stencil8;
         if (r.v.set_format && nvn_fmt_bc(rp->t.d.format) && !nvn_fmt_bc(r.v.format)) {   // the raw blocks of a BC texture through an uncompressed view (see rt_view_fmt): Metal has no such view
             RED_ONCE(86, "Metal cannot create the raw-block view of a compressed texture (NVN format %#x → view %#x): treated as an empty slot", rp->t.d.format, r.v.format);
@@ -9152,6 +9183,28 @@ static void copy_b2t(const p_copy_b2t *c) {
         char p[1024]; snprintf(p, sizeof p, "%s/F%llu_c3d_%llu.bin", dd, (unsigned long long)atomic_load(&g_cur_frame), (unsigned long long)c->tex->serial);
         FILE *f = fopen(p, "wb"); if (f) { fwrite((const uint8_t *)((__bridge id<MTLBuffer>)mb).contents + mo, 1, img * nz, f); fclose(f); } } }
     uint32_t upf; int ubpp;
+    uint32_t bcs = is3d ? 0 : nvn_fmt_bc_soft(c->tex->d.format);
+    int obpp = 0; if (bcs) bc_soft_target(bcs, &obpp);
+    if (bcs) {
+        const uint8_t *src = [(__bridge id<MTLBuffer>)mb contents];
+        if (!src) { RED_ONCE(49, "BC soft: the CPU cannot read the source buffer of a buffer→texture copy"); return; }
+        size_t dpitch = ((size_t)(c->r.width + 3) / 4) * 4 * (size_t)obpp;
+        size_t drows = bc_soft_rows(bcs, c->r.height), dimg = dpitch * drows;
+        id<MTLBuffer> tb = [g_dev newBufferWithLength:dimg * nz ?: 16 options:MTLResourceStorageModeShared];
+        if (!tb) { RED_ONCE(49, "BC soft: failed to allocate decoded copy buffer"); return; }
+        int bad = 0;
+        for (int z = 0; z < nz; z++)
+            if (bc_soft_decode(bcs, src + mo + z * img, row, c->r.width, c->r.height,
+                               (uint8_t *)tb.contents + z * dimg, dpitch)) bad = 1;
+        if (bad) { defer_obj_release(tb); RED_ONCE(49, "BC soft: buffer→texture decode failed"); return; }
+        res_add(tb);
+        id<MTL4ComputeCommandEncoder> b = blit();
+        for (int z = 0; z < nz; z++)
+            enc_b_copy_buffer_texture(b, tb, z * dimg, dpitch, dimg, MTLSizeMake(c->r.width, c->r.height, 1),
+                                      t, layer0 + c->r.zoffset + z, level, MTLOriginMake(c->r.xoffset, c->r.yoffset, 0));
+        defer_obj_release(tb);
+        return;
+    }
     if (is_astc4(t.pixelFormat) && nvn_fmt_bc((uint32_t)c->tex->d.format)) {   // No BC, BC1–3 stored as ASTC: the blocks in the source are transcoded on the CPU into a temporary buffer, then copied block-wise
         const uint8_t *src = [(__bridge id<MTLBuffer>)mb contents];
         if (!src) { RED_ONCE(49, "no BC: the CPU cannot read the source buffer of a buffer→texture copy"); return; }
@@ -9164,7 +9217,7 @@ static void copy_b2t(const p_copy_b2t *c) {
         defer_obj_release(tb);
         return;
     }
-    if (bc_unpack(c->tex->d.format, &upf, &ubpp)) {   // No BC: the compressed blocks in the source are decompressed on the CPU into a temporary buffer, then copied pixel-wise into the decompressed-format texture
+    if (bc_unpack(c->tex, c->tex->d.format, &upf, &ubpp)) {   // No BC: the compressed blocks in the source are decompressed on the CPU into a temporary buffer, then copied pixel-wise into the decompressed-format texture
         const uint8_t *src = [(__bridge id<MTLBuffer>)mb contents];
         if (!src) { RED_ONCE(49, "no BC: the CPU cannot read the source buffer of a buffer→texture copy"); return; }
         size_t up = (size_t)c->r.width * ubpp, uimg = up * c->r.height;

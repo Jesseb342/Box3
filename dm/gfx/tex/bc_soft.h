@@ -1,10 +1,22 @@
 /* Adapted from zenvyzenshiro/NXNativeWindows (MIT License; Copyright 2026 ZenvyZenshiro). See repository LICENSE for terms. */
 // Software decoding of BC1–BC7 textures, for GPUs that cannot sample them (MTLDevice.supportsBCTextureCompression is NO: Apple A16 and older iPhone / iPad GPUs).
-// nvn_fmt_to_mtl maps each BC format to the uncompressed format below while nvn_bc_soft is set, and the uploads decode the blocks into it (nvn_mtl.m).
+// nvn_fmt_to_mtl maps BC6H/BC7 to the target formats below while nvn_bc_soft is set; BC1–5 retain their existing fallback paths.
 // Pure C, no dependency on Metal headers; values are MTLPixelFormat numbers.
 #pragma once
 #include <stddef.h>
 #include <stdint.h>
+
+// Public, prefixed MTLPixelFormat numeric values for the format mapper and tests.
+// Prefixing avoids collisions with the private format enums in nvn_fmt_mtl.c and bc_soft.c.
+enum {
+    BC_SOFT_BC1 = 130, BC_SOFT_BC1_S = 131, BC_SOFT_BC2 = 132, BC_SOFT_BC2_S = 133,
+    BC_SOFT_BC3 = 134, BC_SOFT_BC3_S = 135, BC_SOFT_BC4_U = 140, BC_SOFT_BC4_S = 141,
+    BC_SOFT_BC5_U = 142, BC_SOFT_BC5_S = 143, BC_SOFT_BC6H_S = 150, BC_SOFT_BC6H_U = 151,
+    BC_SOFT_BC7 = 152, BC_SOFT_BC7_S = 153,
+    BC_SOFT_R8U = 10, BC_SOFT_R8S = 12, BC_SOFT_RG8U = 30, BC_SOFT_RG8S = 32,
+    BC_SOFT_RGBA8 = 70, BC_SOFT_RGBA8_S = 71, BC_SOFT_RG11B10F = 92, BC_SOFT_RGBA16F = 115,
+    BC_SOFT_ASTC4_S = 186, BC_SOFT_ASTC4 = 204
+};
 
 extern int nvn_bc_soft;   // 1 = BC textures are decoded on the CPU (set once the Metal device is known; DM_BC_SOFT=1 forces it, =0 turns it off)
 

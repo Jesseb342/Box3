@@ -3,10 +3,24 @@
 #import <Metal/Metal.h>
 #include <stdio.h>
 #include "../nvn_fmt_mtl.h"
+#include "../bc_soft.h"
 int main(void) {
     @autoreleasepool {
         id<MTLDevice> dev = MTLCreateSystemDefaultDevice();
+        if (!dev) { fprintf(stderr, "no Metal device\n"); return 1; }
+        nvn_bc_soft = 1; nvn_bc_astc = 1;
         printf("device %s\n", dev.name.UTF8String);
+        struct { int f; uint32_t source, target; } soft[] = {
+            {0x4d, BC_SOFT_BC7, BC_SOFT_ASTC4}, {0x4e, BC_SOFT_BC7_S, BC_SOFT_ASTC4_S},
+            {0x4f, BC_SOFT_BC6H_S, BC_SOFT_RGBA16F}, {0x50, BC_SOFT_BC6H_U, BC_SOFT_RG11B10F}
+        };
+        int soft_ok = 1;
+        for (unsigned i = 0; i < sizeof soft / sizeof *soft; i++) {
+            uint32_t m = 0; int k = nvn_fmt_to_mtl(soft[i].f, &m, NULL);
+            soft_ok &= k == 2 && m == soft[i].target && nvn_fmt_bc_soft(soft[i].f) == soft[i].source;
+        }
+        soft_ok &= nvn_fmt_bc_soft(0x41) == 0 && nvn_fmt_bc_soft(0x49) == 0;
+        if (!soft_ok) { fprintf(stderr, "BC6H/BC7 software format mapping failed\n"); return 1; }
         int mapped = 0, ok = 0, exact = 0, sub = 0, none = 0, bad_srgb = 0;
         static const int srgb[] = {0x37, 0x38, 0x45, 0x46, 0x47, 0x48, 0x4E, 0x9B, 0x9C};
         for (int f = 0x01; f <= 0x9C; f++) {
@@ -24,7 +38,7 @@ int main(void) {
         }
         for (unsigned i = 0; i < sizeof srgb / sizeof *srgb; i++) {
             uint32_t m; nvn_fmt_to_mtl(srgb[i], &m, NULL);
-            if (!(m == 71 || m == 81 || m == 131 || m == 133 || m == 135 || m == 153)) { printf("sRGB did not land on _sRGB: %#x → %u\n", srgb[i], m); bad_srgb++; }
+            if (!(m == 71 || m == 81 || m == 131 || m == 133 || m == 135 || m == 153 || m == BC_SOFT_ASTC4_S)) { printf("sRGB did not land on _sRGB: %#x → %u\n", srgb[i], m); bad_srgb++; }
         }
         for (int f = 0x87; f <= 0x94; f++) { uint32_t m; nvn_fmt_to_mtl(f, &m, NULL); if (m < 186 || m > 200) { printf("ASTC sRGB did not land on _sRGB: %#x → %u\n", f, m); bad_srgb++; } }
         printf("mapped (nonzero): %d (exact %d, substitute %d), no match %d, total %d; actually created %d/%d; sRGB violations %d\n", mapped, exact, sub, none, 0x9C, ok, mapped, bad_srgb);
