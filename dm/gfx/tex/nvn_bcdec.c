@@ -6,6 +6,30 @@
 #include <string.h>
 
 enum { R8Unorm = 10, R8Snorm = 12, RG8Unorm = 30, RG8Snorm = 32, RGBA8Unorm = 70, RGBA8Unorm_sRGB = 71, RG11B10Float = 92, RGBA16Float = 115 };
+/*
+ * The half-float to R11G11B10F packing helper is adapted from
+ * zenvyzenshiro/NXNativeWindows (bc_soft.c):
+ * https://github.com/zenvyzenshiro/NXNativeWindows
+ * Copyright (c) 2026 seedds
+ * Copyright (c) 2026 ZenvyZenshiro
+ *
+ * MIT License
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
 static uint32_t uf16(uint16_t h, int mb) {
     if (h & 0x8000) return 0;
     if ((h & 0x7c00) == 0x7c00) return (h & 0x03ff) ? 0 : 0x1fu << mb;
