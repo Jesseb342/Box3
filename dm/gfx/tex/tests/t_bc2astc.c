@@ -6,6 +6,7 @@
 #include "../../../third_party/bcdec/bcdec.h"
 #include "../bc2astc_core.h"
 #include "../nvn_bc2astc.h"
+#include "../bc_soft.h"
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -204,6 +205,28 @@ static int run_cat(const cat_t *c, int n, int srgb, stat_t *st, uint8_t *bcs, ui
 }
 static double psnr(double se, int n) { if (se == 0) return 99.0; return 10.0 * log10(255.0 * 255.0 / (se / n)); }
 
+static void test_bc7_soft_astc(void) {
+    enum { NBX = 8, NBY = 8, N = NBX * NBY, BC7 = 152 };
+    uint8_t bc[N * 16], astc[N * 16], ref[N * 64], decoded[32 * 32 * 4];
+    nvn_bc_astc = 1;
+    for (int i = 0; i < N; i++) {
+        uint8_t *b = bc + i * 16;
+        for (int j = 0; j < 16; j++) b[j] = (uint8_t)rnd32();
+        int mode = i & 7;
+        b[0] = (uint8_t)((b[0] & ~((1u << (mode + 1)) - 1u)) | (1u << mode));
+        bcdec_bc7(b, ref + i * 64, 16);
+    }
+    CHECK(bc_soft_decode(BC7, bc, NBX * 16, NBX * 4, NBY * 4, astc, NBX * 16) == 0,
+          "BC7 software texture-to-ASTC decode failed");
+    CHECK(astc_decode(astc, NBX, NBY, 0, decoded) == 0, "astcenc rejected BC7 software ASTC output");
+    uint64_t se = 0;
+    for (int i = 0; i < N * 64; i++) { int d = (int)ref[i] - (int)decoded[i]; se += (uint64_t)(d * d); }
+    double quality = psnr((double)se, N * 64);
+    printf("BC7 software ASTC PSNR: %.2f dB (all eight BC7 modes)\n", quality);
+    CHECK(quality > 20.0, "BC7 software ASTC quality fell below 20 dB");
+}
+
+
 // ---------- checks that do not need astcenc ----------
 static void check_trit_table(void) {   // the encode table inverts the spec's decode (C.2.12)
     for (int T = 0; T < 256; T++) {
@@ -245,7 +268,7 @@ int main(int argc, char **argv) {
     snprintf(tmpdir, sizeof tmpdir, "%s/t_bc2astc.XXXXXX", td); if (!mkdtemp(tmpdir)) { printf("mkdtemp failed\n"); return 1; }
 
     printf("[table / decode]\n");
-    check_trit_table(); check_col_vs_bcdec();
+    check_trit_table(); check_col_vs_bcdec(); test_bc7_soft_astc();
 
     // public interface: format map, level helper against the block helper, zero block
     {
