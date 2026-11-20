@@ -1,11 +1,13 @@
-// See nvn_bcdec.h. Decoding uses bcdec (dm/third_party/bcdec, single header, MIT / public domain).
+// See nvn_bcdec.h. BC1–5 use bcdec; BC6H / BC7 use the full BC1–7 software decoder in bc_soft.c.
 #define BCDEC_IMPLEMENTATION
 #define BCDEC_BC4BC5_PRECISE   // interface with signed variants of BC4 / BC5
 #include "../../third_party/bcdec/bcdec.h"
 #include "nvn_bcdec.h"
+#include "bc_soft.h"
 #include <string.h>
 
 enum { R8Unorm = 10, R8Snorm = 12, RG8Unorm = 30, RG8Snorm = 32, RGBA8Unorm = 70, RGBA8Unorm_sRGB = 71, RGBA16Float = 115 };
+enum { BC6H_S = 150, BC6H_U = 151, BC7 = 152, BC7_S = 153 };
 // NVN: 0x41 RGB_DXT1, 0x42 RGBA_DXT1, 0x43 DXT3, 0x44 DXT5, 0x45–0x48 the same in sRGB, 0x49 / 0x4a BC4 unsigned / signed, 0x4b / 0x4c BC5, 0x4d / 0x4e BC7 (sRGB), 0x4f / 0x50 BC6H signed / unsigned
 int nvn_bc_unpacked(uint32_t f, uint32_t *pf, int *bpp) {
     switch (f) {
@@ -29,14 +31,17 @@ static void block(uint32_t f, const uint8_t *b, uint8_t *o, int op) {   // one b
     case 0x4a: bcdec_bc4(b, o, op, 1); break;
     case 0x4b: bcdec_bc5(b, o, op, 0); break;
     case 0x4c: bcdec_bc5(b, o, op, 1); break;
-    case 0x4d: case 0x4e: bcdec_bc7(b, o, op); break;
-    case 0x4f: case 0x50: {   // bcdec outputs RGB half-float; add alpha = 1.0
+    case 0x4d: return bc_soft_block(BC7, b, o, (size_t)op);
+    case 0x4e: return bc_soft_block(BC7_S, b, o, (size_t)op);
+    case 0x4f: return bc_soft_block(BC6H_S, b, o, (size_t)op);
+    case 0x50: return bc_soft_block(BC6H_U, b, o, (size_t)op);
+    /*case 0x4f: case 0x50: {   // legacy bcdec BC6H path
         uint16_t rgb[16 * 3]; bcdec_bc6h_half(b, rgb, 4 * 3, f == 0x4f);
         for (int y = 0; y < 4; y++) for (int x = 0; x < 4; x++) {
             uint16_t *d = (uint16_t *)(o + y * op) + x * 4; const uint16_t *s = rgb + (y * 4 + x) * 3;
             d[0] = s[0]; d[1] = s[1]; d[2] = s[2]; d[3] = 0x3c00;
         }
-        break; }
+        break; }*/
     }
 }
 
