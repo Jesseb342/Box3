@@ -223,7 +223,7 @@ static void test_bc7_soft_astc(void) {
     for (int i = 0; i < N * 64; i++) { int d = (int)ref[i] - (int)decoded[i]; se += (uint64_t)(d * d); }
     double quality = psnr((double)se, N * 64);
     printf("BC7 software ASTC PSNR: %.2f dB (all eight BC7 modes)\n", quality);
-    CHECK(quality > 0.0, "BC7 software ASTC output has no measurable signal");
+    CHECK(quality > 20.0, "BC7 software ASTC quality fell below 20 dB");
 }
 
 
