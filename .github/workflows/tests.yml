@@ -6,7 +6,7 @@ name: tests
 on:
   pull_request:
   push:
-    branches: [main, bc-fallback-experiment]
+    branches: [main, bc-fallback-experiment, bc-compact-fallback]
   workflow_dispatch:
 
 permissions:
@@ -43,10 +43,26 @@ jobs:
       - name: Thermal cap and ThreadSanitizer (concurrent frame-cap readers)
         run: |
           make -C dm/gfx/tests GAME="$GAME" -j3 check_t_thermal thermal-tsan 2>&1 | tee logs/thermal.log
-      - name: CPU texture layout and deswizzle tests
+      - name: CPU texture and BC software decoder tests
         run: |
-          make -C dm/gfx/tex/tests t_tex 2>&1 | tee logs/texture-build.log
+          make -C dm/gfx/tex/tests t_tex t_bc_soft t_bcdec t_bc2astc t_fmt_mtl 2>&1 | tee logs/texture-build.log
           dm/gfx/tex/tests/t_tex 2>&1 | tee logs/texture-tests.log
+          dm/gfx/tex/tests/t_bc_soft 2>&1 | tee logs/bc-soft-tests.log
+          dm/gfx/tex/tests/t_bcdec 2>&1 | tee logs/bcdec-tests.log
+      - name: Install astcenc for BC7 ASTC validation
+        run: |
+          curl -L --fail --silent --show-error \
+            https://github.com/ARM-software/astc-encoder/releases/download/5.7.1/astcenc-5.7.1-macos-universal.zip \
+            -o "$RUNNER_TEMP/astcenc.zip"
+          echo "cb2dd75e33fcc12ebaae9e2230649e30da10c152b029a6d2f3440f6d45ed5c45  $RUNNER_TEMP/astcenc.zip" | shasum -a 256 -c -
+          mkdir -p "$RUNNER_TEMP/astcenc"
+          unzip -q "$RUNNER_TEMP/astcenc.zip" -d "$RUNNER_TEMP/astcenc"
+          ASTCENC_BIN="$(find "$RUNNER_TEMP/astcenc" -type f -name astcenc -print -quit)"
+          test -n "$ASTCENC_BIN"
+          chmod +x "$ASTCENC_BIN"
+          echo "ASTCENC_BIN=$ASTCENC_BIN" >> "$GITHUB_ENV"
+      - name: BC1–3 and BC7 ASTC regression tests
+        run: make -C dm/gfx/tex/tests astc ASTCENC="$ASTCENC_BIN" 2>&1 | tee logs/bc-astc-tests.log
       - name: CPU-only gfx tests (dm/gfx/tests)
         run: |
           mkdir -p logs

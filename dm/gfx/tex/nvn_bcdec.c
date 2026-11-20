@@ -3,18 +3,44 @@
 #define BCDEC_BC4BC5_PRECISE   // interface with signed variants of BC4 / BC5
 #include "../../third_party/bcdec/bcdec.h"
 #include "nvn_bcdec.h"
+#include "bc_soft.h"
 #include <string.h>
 
-enum { R8Unorm = 10, R8Snorm = 12, RG8Unorm = 30, RG8Snorm = 32, RGBA8Unorm = 70, RGBA8Unorm_sRGB = 71, RGBA16Float = 115 };
+enum { R8Unorm = 10, R8Snorm = 12, RG8Unorm = 30, RG8Snorm = 32, RGBA8Unorm = 70, RGBA8Unorm_sRGB = 71, RGBA16Float = 115,
+       BC6H_S = 150, BC6H_U = 151, BC7 = 152, BC7_S = 153 };
 // NVN: 0x41 RGB_DXT1, 0x42 RGBA_DXT1, 0x43 DXT3, 0x44 DXT5, 0x45–0x48 the same in sRGB, 0x49 / 0x4a BC4 unsigned / signed, 0x4b / 0x4c BC5, 0x4d / 0x4e BC7 (sRGB), 0x4f / 0x50 BC6H signed / unsigned
+uint32_t nvn_bc_mtl_pf(uint32_t f) {
+    switch (f) {
+    case 0x4d: return BC7;
+    case 0x4e: return BC7_S;
+    case 0x4f: return BC6H_S;
+    case 0x50: return BC6H_U;
+    default: return 0;
+    }
+}
+int nvn_bc_soft_unpacked(uint32_t f, uint32_t *pf, int *bpp) {
+    uint32_t source = nvn_bc_mtl_pf(f);
+    if (!nvn_bc_soft || !source) return 0;
+    uint32_t target = bc_soft_target(source, bpp);
+    if (!target) return 0;
+    if (pf) *pf = target;
+    return 1;
+}
+int nvn_bc_soft_decode(uint32_t f, const uint8_t *src, size_t pitch, uint32_t w, uint32_t h, uint8_t *dst, size_t dpitch) {
+    uint32_t source = nvn_bc_mtl_pf(f);
+    if (!nvn_bc_soft || !source) return -1;
+    return bc_soft_decode(source, src, pitch, w, h, dst, dpitch);
+}
 int nvn_bc_unpacked(uint32_t f, uint32_t *pf, int *bpp) {
     switch (f) {
-    case 0x41: case 0x42: case 0x43: case 0x44: case 0x4d: *pf = RGBA8Unorm; *bpp = 4; return 1;
-    case 0x45: case 0x46: case 0x47: case 0x48: case 0x4e: *pf = RGBA8Unorm_sRGB; *bpp = 4; return 1;
+    case 0x41: case 0x42: case 0x43: case 0x44: *pf = RGBA8Unorm; *bpp = 4; return 1;
+    case 0x45: case 0x46: case 0x47: case 0x48: *pf = RGBA8Unorm_sRGB; *bpp = 4; return 1;
     case 0x49: *pf = R8Unorm; *bpp = 1; return 1;
     case 0x4a: *pf = R8Snorm; *bpp = 1; return 1;
     case 0x4b: *pf = RG8Unorm; *bpp = 2; return 1;
     case 0x4c: *pf = RG8Snorm; *bpp = 2; return 1;
+    case 0x4d: *pf = RGBA8Unorm; *bpp = 4; return 1;
+    case 0x4e: *pf = RGBA8Unorm_sRGB; *bpp = 4; return 1;
     case 0x4f: case 0x50: *pf = RGBA16Float; *bpp = 8; return 1;
     default: return 0;
     }

@@ -1,6 +1,6 @@
 /* Adapted from zenvyzenshiro/NXNativeWindows (MIT License; Copyright 2026 ZenvyZenshiro). See repository LICENSE for terms. */
 // Software decoding of BC1–BC7 textures, for GPUs that cannot sample them (MTLDevice.supportsBCTextureCompression is NO: Apple A16 and older iPhone / iPad GPUs).
-// nvn_fmt_to_mtl maps each BC format to the uncompressed format below while nvn_bc_soft is set, and the uploads decode the blocks into it (nvn_mtl.m).
+// The NVN upload path uses nvn_bc_soft_unpacked / nvn_bc_soft_decode for non-3D BC6H/BC7; BC1–5 retain their existing paths and 3D uses the legacy RGBA decode.
 // Pure C, no dependency on Metal headers; values are MTLPixelFormat numbers.
 #pragma once
 #include <stddef.h>
@@ -16,7 +16,7 @@ uint32_t bc_soft_target(uint32_t mtl_pf, int *bytes_per_pixel);
 size_t bc_soft_rows(uint32_t mtl_pf, uint32_t h);
 extern int nvn_bc_astc;   // 1 (the default) = BC1 / 2 / 3 / 7 become ASTC 4x4 and BC6H unsigned RG11B10F; 0 = RGBA8 / RGBA16F
 
-// Decode a w × h region of BC blocks (src: rows of 4 × 4 blocks, src_pitch bytes from one block row to the next) into dst (dst_pitch bytes per pixel row).
+// Decode a w × h region of BC blocks (src: rows of 4 × 4 blocks, src_pitch bytes from one block row to the next) into dst. dst_pitch is an ASTC block-row pitch for ASTC targets, otherwise a padded pixel-row pitch.
 // dst must hold whole blocks: ceil(w / 4) * 4 pixels per row and ceil(h / 4) * 4 rows. Returns 0, or -1 when mtl_pf is no BC format
 int bc_soft_decode(uint32_t mtl_pf, const uint8_t *src, size_t src_pitch, uint32_t w, uint32_t h, uint8_t *dst, size_t dst_pitch);
 
