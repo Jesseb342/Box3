@@ -4,11 +4,11 @@
 #include <stddef.h>
 #include <stdint.h>
 
-// NVN format is BC1/2/3 → returns 1, *mtl_pf = MTLPixelFormatASTC_4x4_LDR (204) or ASTC_4x4_sRGB (186), *kind = 1/2/3 (BC1/BC2/BC3); returns 0 for every other format
+// NVN format is BC1/2/3 (0x41–0x48) or BC7 (0x4d/0x4e) → returns 1, *mtl_pf = MTLPixelFormatASTC_4x4_LDR (204) or ASTC_4x4_sRGB (186), *kind = 1/2/3 (BC1/BC2/BC3) or 4 (BC7); returns 0 for every other format
 int nvn_bc_astc_fmt(uint32_t nvn_fmt, uint32_t *mtl_pf, int *kind);
-// One block: bc has 8 bytes (kind 1) or 16 bytes (kind 2, 3), astc receives 16 bytes. Returns the layout id of bc2astc_core.h (| BCA_SWAPPED)
+// One block: bc has 8 bytes (kind 1) or 16 bytes (kind 2, 3), astc receives 16 bytes. BC1–3 return the layout id of bc2astc_core.h (| BCA_SWAPPED); BC7 returns 0
 uint32_t nvn_bc2astc_block(int kind, const uint8_t *bc, uint8_t *astc);
-// A w×h texel region: src has pitch bytes per block row, dst dpitch bytes per block row (16 per ASTC block). Returns 0 on success, -1 if the format is not BC1/2/3
+// A w×h texel region for BC1–3 or BC7: src has pitch bytes per block row, dst dpitch bytes per block row (16 per ASTC block). Returns 0 on success, -1 if the format is not BC1/2/3
 int nvn_bc2astc(uint32_t nvn_fmt, const uint8_t *src, size_t pitch, uint32_t w, uint32_t h, uint8_t *dst, size_t dpitch);
 // The block that ASTC textures are filled with where BC textures are zero-filled: a constant (0,0,0,0) block (an all-zero ASTC block is invalid)
 void nvn_astc_zero_block(uint8_t out[16]);

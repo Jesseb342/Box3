@@ -1713,18 +1713,18 @@ static int pkg_edges_clean(NvPkg *pk, const tex_t *t) {   // the covered pages w
 static int no_bc(void) {
     static int v = -1;
     if (v < 0) { const char *e = getenv("DM_TEST_NO_BC"); v = (e && *e && strcmp(e, "0")) || ![g_dev supportsBCTextureCompression];
-        if (v) MLOG("the GPU has no BC compressed formats%s: BC textures are stored as ASTC 4x4 (BC1–3) or decompressed (see the DM_NO_BC_ASTC line)", e && *e && strcmp(e, "0") ? " (test switch DM_TEST_NO_BC)" : ""); }
+        if (v) MLOG("the GPU has no BC compressed formats%s: BC1–3 and BC7 use ASTC 4x4, unsigned BC6H uses R11G11B10F, and the remaining formats are decoded", e && *e && strcmp(e, "0") ? " (test switch DM_TEST_NO_BC)" : ""); }
     return v;
 }
 static int bc_unpack(uint32_t nvn_fmt, uint32_t *pf, int *bpp) { return no_bc() && nvn_bc_unpacked(nvn_fmt, pf, bpp); }
-// No BC: BC1, BC2 and BC3 are stored as ASTC 4x4 (8 bits per texel, a quarter of RGBA8) by transcoding every BC block into one ASTC block at upload (nvn_bc2astc.h, bc2astc_core.h; GPU kernel `bca`). BC4 / BC5 / BC6H / BC7 and 3D textures stay decompressed.
+// No BC: BC1–3 and BC7 are stored as ASTC 4x4. BC1–3 use the existing BC→ASTC transcoder (GPU kernel `bca` when available); BC7 uses the CPU BC7 decoder and endpoint-fit ASTC encoder. BC4 / BC5 remain GPU-decoded; signed BC6H remains RGBA16F and unsigned BC6H is packed as R11G11B10F. 3D textures retain the existing path.
 // DM_NO_BC_ASTC=all (default) | bc1 (BC1 only) | 0 (everything decompressed to RGBA8, the A/B reference). BC3 alpha carries real data in some games and ASTC keeps four alpha levels per block (about 30 dB), so a game profile can list
 // the packaged BC3 textures that stay RGBA8 (dm/games/<id>/bc3_keep_rgba8.tsv, written by tests/bench_bc2astc_dread.c, keyed by nvn_texkey of their storage); DM_NO_BC_ASTC_KEEP=0 ignores the list (A/B)
 static int keep_on(void);
 static int astc_mode(void) {
     static int v = -1;
     if (v < 0) { const char *e = getenv("DM_NO_BC_ASTC"); v = !e || !*e || !strcmp(e, "all") ? 2 : (!strcmp(e, "bc1") ? 1 : (!strcmp(e, "0") ? 0 : 2));
-        MLOG("no BC: DM_NO_BC_ASTC=%s: %s%s", e && *e ? e : "(unset) all", v == 2 ? "BC1, BC2 and BC3 are stored as ASTC 4x4 (8 bits per texel), BC4 / BC5 / BC6H / BC7 and 3D textures decompressed" : v == 1 ? "BC1 is stored as ASTC 4x4, every other BC format decompressed" : "every BC format is decompressed to RGBA8 / R8 / RG8 / RGBA16F",
+        MLOG("no BC: DM_NO_BC_ASTC=%s: %s%s", e && *e ? e : "(unset) all", v == 2 ? "BC1–3 and BC7 are stored as ASTC 4x4; unsigned BC6H as R11G11B10F; BC4 / BC5 and signed BC6H use decoded formats" : v == 1 ? "BC1 is stored as ASTC 4x4, every other BC format decompressed" : "every BC format is decompressed to RGBA8 / R8 / RG8 / RGBA16F",
              v && !keep_on() ? " (DM_NO_BC_ASTC_KEEP=0: the BC3 keep table is ignored)" : ""); }
     return v;
 }
@@ -1769,7 +1769,7 @@ static int is_astc4(MTLPixelFormat f) { return f == MTLPixelFormatASTC_4x4_LDR |
 static MTLTextureDescriptor *tex_desc(const tex_t *t, int packaged) {
     uint32_t pf = 0; uint8_t swz[4];
     if (!nvn_fmt_to_mtl(t->d.format, &pf, swz) || !pf) { RED_ONCE(0, "texture format %#x has no Metal equivalent (first case)", t->d.format); return nil; }
-    int unp = 0, astc = 0; { uint32_t upf; int ubpp; if (bc_astc(t, &upf)) { pf = upf; astc = 1; } else if (bc_unpack(t->d.format, &upf, &ubpp)) { pf = upf; unp = 1; } }   // No BC: BC1–3 as ASTC 4x4, the rest created in the decompressed format
+    int unp = 0, astc = 0; { uint32_t upf; int ubpp; if (bc_astc(t, &upf)) { pf = upf; astc = 1; } else if (bc_unpack(t->d.format, &upf, &ubpp)) { pf = upf; unp = 1; } }   // No BC: BC1–3 and BC7 as ASTC 4x4, unsigned BC6H as R11G11B10F, the rest in decoded formats
     // Metal's limits: 16384 in 2D, 2048 in 3D, 2048 array layers; beyond them Metal aborts the process on an assertion, so they are caught here with a red line
     if (t->d.width > 16384 || t->d.height > 16384 || t->d.depth > 2048) { RED_ONCE(71, "texture size exceeds Metal limits: %u×%u×%u levels %u format %#x target %d (first case ser=%llu)", t->d.width, t->d.height, t->d.depth, t->d.levels, t->d.format, t->d.target, (unsigned long long)t->serial); return nil; }
     MTLTextureDescriptor *d = [MTLTextureDescriptor new];
@@ -2218,7 +2218,7 @@ static id<MTLTexture> pkg_upload_(const tex_t *t, uint64_t *stamp, id<MTLTexture
         if (sparse) nvn_sparse_protect(t->pool, (uint64_t)(uintptr_t)t->mem, t->L.size); else nvn_dirty_protect(t->mem, t->L.size); }
     int bw, bh, bpb = nvn_fmt_bpb(t->d.format, &bw, &bh);
     unsigned layers = (t->d.target == 4 || t->d.target == 9) ? t->d.depth : t->d.target == 8 ? 6 : t->d.target == 3 ? t->d.height : 1;   // a cube array's depth counts layer-faces (tex_desc)
-    uint32_t upf; int ubpp = 0, unp = 0, astc = bc_astc(t, &upf);   // No BC: BC1–3 are transcoded to ASTC 4x4 after deswizzling; the other BC formats are decompressed (on the CPU, or BC4 / BC5 on the GPU)
+    uint32_t upf; int ubpp = 0, unp = 0, astc = bc_astc(t, &upf);   // No BC: BC1–3 use the GPU ASTC transcoder when available; BC7 uses the CPU ASTC encoder; other BC formats are decoded
     if (!astc) unp = bc_unpack(t->d.format, &upf, &ubpp);
     int akind = 0; if (astc) { uint32_t apf; nvn_bc_astc_fmt((uint32_t)t->d.format, &apf, &akind); }
     size_t total = 0;
@@ -2228,8 +2228,8 @@ static id<MTLTexture> pkg_upload_(const tex_t *t, uint64_t *stamp, id<MTLTexture
     }
     g_bp_up_bytes += total;
     void *mb; uint64_t mo;
-    int gdec = unp && !sparse && t->d.target != 2 && bcd_fmt(t->d.format) && bcd_pso();   // BC1–5 without BC: GPU deswizzle + GPU decompression
-    int gast = astc && !sparse && bca_pso();   // BC1–3 as ASTC: GPU deswizzle + GPU transcoding
+    int gdec = unp && !sparse && t->d.target != 2 && bcd_fmt(t->d.format) && bcd_pso();   // BC4 / BC5 without BC: GPU deswizzle + GPU decompression
+    int gast = astc && akind <= 3 && !sparse && bca_pso();   // BC1–3 use GPU ASTC transcoding; BC7 is CPU encoded
     size_t ctotal = 0, abase = 0, atotal = 0;   // Staging size of the compressed blocks (with GPU decompression / transcoding the staging area holds compressed blocks; the transcoded blocks follow at abase)
     if (gast) for (unsigned l = 0; l < d.mipmapLevelCount; l++) { uint32_t w = MAX(t->d.width >> l, 1u), h = MAX(t->d.height >> l, 1u); ctotal += (size_t)((w + bw - 1) / bw) * bpb * ((h + bh - 1) / bh) * layers; atotal += (size_t)((w + 3) / 4) * ((h + 3) / 4) * 16 * layers; }
     if (gast) abase = (ctotal + 255u) & ~(size_t)255u;

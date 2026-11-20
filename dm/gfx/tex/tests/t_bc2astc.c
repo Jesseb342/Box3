@@ -238,6 +238,35 @@ static void check_col_vs_bcdec(void) {   // the transcoder's colour decode is bc
     CHECK(bad == 0, "bca_col differs from bcdec in %d values", bad);
 }
 
+
+static void test_bc7_astc(void) {
+    enum { NBX = 8, NBY = 8, N = NBX * NBY };
+    uint8_t bc[N * 16], astc[N * 16], ref[N * 64], decoded[NBX * 4 * NBY * 4 * 4];
+    for (int i = 0; i < N; i++) {
+        uint8_t *b = bc + i * 16;
+        for (int j = 0; j < 16; j++) b[j] = (uint8_t)rnd32();
+        int mode = i & 7;
+        b[0] = (uint8_t)((b[0] & ~((1u << (mode + 1)) - 1u)) | (1u << mode));
+        bcdec_bc7(b, ref + i * 64, 16);
+        nvn_bc2astc_block(4, b, astc + i * 16);
+    }
+    int rc = astc_decode(astc, NBX, NBY, 0, decoded);
+    CHECK(rc == 0, "BC7 → ASTC blocks were rejected by astcenc (rc=%d)", rc);
+    if (rc) return;
+    uint64_t se = 0; size_t count = 0;
+    for (int by = 0; by < NBY; by++) for (int bx = 0; bx < NBX; bx++) {
+        int bi = by * NBX + bx;
+        for (int y = 0; y < 4; y++) for (int x = 0; x < 4; x++) for (int c = 0; c < 4; c++) {
+            int a = ref[bi * 64 + (y * 4 + x) * 4 + c];
+            int z = decoded[((by * 4 + y) * (NBX * 4) + bx * 4 + x) * 4 + c];
+            int d = a - z; se += (uint64_t)(d * d); count++;
+        }
+    }
+    double quality = psnr(se, count);
+    printf("BC7 → ASTC fitted encoder: %d blocks, RGB+A PSNR %.2f dB\n", N, quality);
+    CHECK(quality > 0.0, "BC7 → ASTC produced no usable image data");
+}
+
 int main(int argc, char **argv) {
     verbose = argc > 1 && !strcmp(argv[1], "-v");
     astcenc = getenv("ASTCENC") ? getenv("ASTCENC") : "astcenc";
@@ -254,15 +283,34 @@ int main(int argc, char **argv) {
             int r = nvn_bc_astc_fmt(f, &pf, &k), want_k = (f == 0x41 || f == 0x42 || f == 0x45 || f == 0x46) ? 1 : ((f == 0x43 || f == 0x47) ? 2 : 3);
             if (f < 0x41 || f > 0x48) ok &= !r; else ok &= r && k == want_k && pf == (f >= 0x45 ? 186u : 204u);
         }
+        ok &= nvn_bc_astc_fmt(0x4d, &pf, &k) && k == 4 && pf == 204;
+        ok &= nvn_bc_astc_fmt(0x4e, &pf, &k) && k == 4 && pf == 186;
         CHECK(ok, "nvn_bc_astc_fmt maps formats wrongly");
         uint8_t src[4 * 3 * 16], dst[4 * 3 * 16], ref[16]; for (size_t i = 0; i < sizeof src; i++) src[i] = (uint8_t)rnd32();
         CHECK(nvn_bc2astc(0x44, src, 3 * 16, 10, 7, dst, 3 * 16) == 0, "nvn_bc2astc failed");
         int same = 1; for (int by = 0; by < 2; by++) for (int bx = 0; bx < 3; bx++) { nvn_bc2astc_block(3, src + by * 48 + bx * 16, ref); same &= !memcmp(ref, dst + by * 48 + bx * 16, 16); }
-        CHECK(same, "nvn_bc2astc differs from nvn_bc2astc_block"); CHECK(nvn_bc2astc(0x49, src, 24, 8, 8, dst, 32) == -1, "BC4 must be refused");
+        CHECK(same, "nvn_bc2astc differs from nvn_bc2astc_block");
+
+        uint8_t b7src[6 * 16], b7dst[6 * 16], b7ref[16];
+        for (int i = 0; i < 6; i++) {
+            uint8_t *b = b7src + i * 16;
+            for (int j = 0; j < 16; j++) b[j] = (uint8_t)rnd32();
+            int mode = i & 7;
+            b[0] = (uint8_t)((b[0] & ~((1u << (mode + 1)) - 1u)) | (1u << mode));
+        }
+        CHECK(nvn_bc2astc(0x4d, b7src, 3 * 16, 10, 7, b7dst, 3 * 16) == 0, "BC7 partial-edge ASTC transcode failed");
+        int b7same = 1;
+        for (int by = 0; by < 2; by++) for (int bx = 0; bx < 3; bx++) {
+            nvn_bc2astc_block(4, b7src + by * 48 + bx * 16, b7ref);
+            b7same &= !memcmp(b7ref, b7dst + by * 48 + bx * 16, 16);
+        }
+        CHECK(b7same, "BC7 region transcode differs from its block helper");
+        CHECK(nvn_bc2astc(0x49, src, 24, 8, 8, dst, 32) == -1, "BC4 must be refused");
         uint8_t z[16], img[16 * 4]; nvn_astc_zero_block(z);
         int rc = astc_decode(z, 1, 1, 0, img); if (rc) { printf("astcenc decode failed (%d) with %s (set ASTCENC)\n", rc, astcenc); return 1; }
         int zero = 1; for (int i = 0; i < 64; i++) zero &= img[i] == 0;
         CHECK(zero, "the zero block does not decode to (0,0,0,0)");
+        test_bc7_astc();
     }
 
     printf("\n%-30s %6s  %-28s %5s | %5s %5s %7s | %5s %5s %7s\n", "category (linear)", "blocks", "layouts L0 L1a L1b L2 L3", "swap", "maxRGB", "", "PSNR", "maxA", "", "PSNR");
