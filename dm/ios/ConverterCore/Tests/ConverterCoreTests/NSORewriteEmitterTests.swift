@@ -52,7 +52,7 @@ final class NSORewriteEmitterTests: XCTestCase {
         XCTAssertEqual(block.fixups, [NSORewriteFixup(byteOffset: 8, key: "K18")])
         let decoded = try decoder.disassemble(block.data, at: 0x2000)
         XCTAssertEqual(decoded.map(\.mnemonic), [
-            "stp", "mrs", "adrp", "ldr", "add", "ldr", "add", "add", "ldp", "b"
+            "stp", "mrs", "adrp", "ldr", "add", "ldr", "mov", "mov", "ldp", "b"
         ])
         XCTAssertEqual(decoded[8].operandString, "x0, x1, [x1, #-0x10]")
     }
@@ -75,7 +75,7 @@ final class NSORewriteEmitterTests: XCTestCase {
         XCTAssertEqual(block.fixups, [NSORewriteFixup(byteOffset: 8, key: "K18")])
         let decoded = try decoder.disassemble(block.data, at: 0x2000)
         XCTAssertEqual(decoded[6].mnemonic, "cbz")
-        XCTAssertEqual(decoded[6].operandString, "x0, #0x2024")
+        XCTAssertEqual(decoded[6].operandString, "x0, 0x2024")
         XCTAssertEqual(decoded[7].mnemonic, "ldp")
         XCTAssertEqual(decoded[8].mnemonic, "b")
         XCTAssertEqual(decoded[9].mnemonic, "ldp")
@@ -98,7 +98,7 @@ final class NSORewriteEmitterTests: XCTestCase {
         )
         let decoded = try decoder.disassemble(block.data, at: 0x2000)
         XCTAssertEqual(decoded[6].mnemonic, "tbz")
-        XCTAssertEqual(decoded[6].operandString, "x0, #3, #0x2024")
+        XCTAssertEqual(decoded[6].operandString, "x0, #3, 0x2024")
     }
 
     func testRejectsStackPointerDestination() throws {
