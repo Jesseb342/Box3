@@ -43,6 +43,7 @@ public struct NCAHeader {
     public let keyGeneration: UInt8
     public let rightsID: Data
     public let sections: [Section]
+    public let sectionHeaderHashes: [Data]
 
     public var usesTitleKeyCrypto: Bool {
         rightsID.contains(where: { $0 != 0 })
@@ -90,6 +91,10 @@ public struct NCAHeader {
         self.keyGeneration = data[0x220]
         self.rightsID = data.subdata(in: 0x230..<0x240)
         self.sections = sections
+        self.sectionHeaderHashes = (0..<4).map { index in
+            let offset = 0x280 + index * 0x20
+            return data.subdata(in: offset..<(offset + 0x20))
+        }
     }
 
     private static func u32(_ data: Data, _ offset: Int) -> UInt32 {
