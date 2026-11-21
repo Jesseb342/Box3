@@ -19,7 +19,6 @@ final class NSOSegmentLoaderTests: XCTestCase {
         file.replaceSubrange(0x100..<0x104, with: Data([0x13, 0x11, 0x01, 0x00]))
         putLE(UInt32(4), at: 0x60, in: &file)
         putLE(UInt32(8), at: 0x18, in: &file)
-        putLE(UInt32(8), at: 0x10, in: &file) // second segment starts after segment 0's stored bytes
         putLE(UInt32(8), at: 0x24, in: &file)
         // Keep segment 1 and 2 payload ranges non-overlapping.
         putLE(UInt32(0x108), at: 0x20, in: &file)
