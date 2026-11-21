@@ -58,7 +58,7 @@ public enum AArch64RegisterSubstitution {
     }
 
     private static func replacingRegisterTokens(_ operands: String, with register: Int) throws -> String {
-        let expression = try NSRegularExpression(pattern: #"\\b([xw])18\\b"#)
+        let expression = try NSRegularExpression(pattern: #"\b([xw])18\b"#)
         let range = NSRange(operands.startIndex..., in: operands)
         guard expression.firstMatch(in: operands, range: range) != nil else {
             throw AArch64SubstitutionError.instructionDoesNotMentionX18
@@ -66,7 +66,7 @@ public enum AArch64RegisterSubstitution {
         return expression.stringByReplacingMatches(
             in: operands,
             range: range,
-            withTemplate: "$1\\(register)"
+            withTemplate: "$1\(register)"
         )
     }
 }
