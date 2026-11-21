@@ -90,9 +90,12 @@ Keep the app modular. UI code must orchestrate native conversion services and di
    - Extract and classify shader containers from the game's assets.
    - Port or compile the required Ryujinx translation stages so Maxwell/NVN shaders can be translated on-device.
    - Convert SPIR-V to MSL with SPIRV-Cross or an equivalent in-process library.
-   - Compile MSL using Apple's Metal compiler APIs on the device and cache results by source/profile/device/compiler version.
+   - Convert SPIR-V to MSL with SPIRV-Cross or an equivalent in-process library.
+   - Cache translated MSL by source/profile/translator version. Apple documents `MTLDevice.makeLibrary(source:options:)` as compiling MSL source at runtime; this gives us an on-device route without `xcrun metal`.
+   - Adapt the Box3 runtime to load/compile MSL source strings instead of requiring the desktop pipeline's prebuilt `.metallib` files. Use Metal binary archives for pipeline-state caching where supported.
    - Preserve separate Vulkan/OpenGL paths where a game uses them; do not assume every game is NVN.
    - Reuse precomputed profile data where available, but do not require a Mac-generated per-game shader library for the on-device workflow.
+   - Validate runtime source compilation performance and API behavior on the actual iPhone 14 before committing to the final cache format.
 
 5. **Runtime assembly and resource staging**
    - Build a generic Box3 host/runtime that loads rewritten guest modules and per-game resources from the job output, rather than compiling a different executable for every game.
