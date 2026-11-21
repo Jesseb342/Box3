@@ -80,6 +80,51 @@ final class NSORewriteBatchEmitterTests: XCTestCase {
         ])
     }
 
+    func testBatchEmitsHostGatesStackAlignmentAndCTRConstant() throws {
+        let decoder = try AArch64Disassembler()
+        let layout = try NSOPatchLayout.make(
+            segments: [
+                segment(0, 0, 0x2000),
+                segment(1, 0x2000, 0x1000),
+                segment(2, 0x3000, 0x1000)
+            ],
+            bssSize: 0x2000
+        )
+        var base = Data(repeating: 0, count: Int(layout.fileImageLength))
+        let code = Data([
+            0x01, 0x10, 0x00, 0xd4, // svc #0x80
+            0x45, 0xe0, 0x3b, 0xd5, // mrs x5, cntvct_el0
+            0xff, 0x63, 0x29, 0xcb, // sub sp, sp, x9
+            0x27, 0x00, 0x3b, 0xd5  // mrs x7, ctr_el0
+        ])
+        base.replaceSubrange(0x1000..<0x1010, with: code)
+        let plan = try NSORewritePlanner.plan(
+            image: base,
+            codeRanges: [try NSOCodeRange(start: 0x1000, end: 0x1010)],
+            decoder: decoder
+        )
+        let result = try NSORewriteBatchEmitter.emitPlainX18Sites(
+            baseImage: base,
+            plan: plan,
+            layout: layout,
+            decoder: decoder
+        )
+        XCTAssertEqual(result.patchedSiteCount, 4)
+        XCTAssertEqual(result.patchData.count, 96)
+        XCTAssertEqual(result.fixups, [
+            NSORewriteFixup(byteOffset: 8, key: "KGATE"),
+            NSORewriteFixup(byteOffset: 48, key: "KGATE")
+        ])
+        XCTAssertEqual(result.gates, [
+            NSORewriteGate(returnAddress: 0x10020, kind: "svc", argument: 0x80, originalAddress: 0x1000),
+            NSORewriteGate(returnAddress: 0x10048, kind: "cntvct", argument: 5, originalAddress: 0x1004)
+        ])
+        let ctr = result.fileData[0x100C..<0x1010].enumerated().reduce(UInt32(0)) {
+            $0 | (UInt32($1.element) << (8 * $1.offset))
+        }
+        XCTAssertEqual(ctr, 0xD2A00087)
+    }
+
     func testRejectsMixedUnimplementedSiteKindsWithoutPartialOutput() throws {
         let plan = NSORewritePlan(
             sites: [
