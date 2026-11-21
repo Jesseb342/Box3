@@ -23,7 +23,7 @@ public struct NCAHeader {
         public var byteSize: UInt64 { UInt64(mediaEnd - mediaStart) * 0x200 }
     }
 
-    public enum ContentType: UInt8 {
+    public enum ContentType: UInt8, Equatable {
         case program = 0
         case meta = 1
         case control = 2
