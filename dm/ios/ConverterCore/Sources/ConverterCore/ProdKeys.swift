@@ -31,8 +31,8 @@ public struct ProdKeys {
                 throw ProdKeysError.malformedLine(lineNumber)
             }
 
-            let name = line[..<separator].trimmingCharacters(in: .whitespaces)
-            let hex = line[line.index(after: separator)...]
+            let name = String(line[..<separator]).trimmingCharacters(in: .whitespaces)
+            let hex = String(line[line.index(after: separator)...])
                 .trimmingCharacters(in: .whitespacesAndNewlines)
 
             guard Self.isValidName(name) else {
