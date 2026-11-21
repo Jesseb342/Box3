@@ -22,6 +22,10 @@ public final class AArch64Disassembler {
         self.engine = engine
     }
 
+    public func registerName(_ registerID: UInt16) -> String? {
+        engine.registerName(UInt32(registerID))
+    }
+
     public func disassemble(_ code: Data, at address: UInt64 = 0) throws -> [Instruction] {
         guard code.count % 4 == 0 else {
             throw AArch64DisassemblyError.inputNotWordAligned(code.count)
