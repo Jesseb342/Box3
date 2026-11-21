@@ -40,6 +40,38 @@ final class NSOSegmentLoaderTests: XCTestCase {
         XCTAssertThrowsError(try image.decompressedSegments(from: Data()))
     }
 
+    func testReconstructsContiguousNearImageWithZeroFilledGapsAndKeyPage() throws {
+        let file = makeNSO()
+        let nso = try NSOImage(data: file)
+        let layout = try NSOPatchLayout.make(segments: nso.segments, bssSize: nso.bssSize)
+
+        XCTAssertFalse(layout.isFar)
+        XCTAssertEqual(layout.keyPageOffset, 0x4000)
+        XCTAssertEqual(layout.fileImageLength, 0x8000)
+
+        let image = try nso.reconstructedImage(from: file, layout: layout)
+        XCTAssertEqual(image.count, Int(layout.fileImageLength))
+        XCTAssertEqual(image.subdata(in: 0..<4), Data(repeating: 0x11, count: 4))
+        XCTAssertEqual(image.subdata(in: 0x10..<0x14), Data(repeating: 0x22, count: 4))
+        XCTAssertEqual(image.subdata(in: 0x20..<0x24), Data(repeating: 0x33, count: 4))
+        XCTAssertEqual(image.subdata(in: 0x04..<0x10), Data(repeating: 0, count: 0x0c))
+        XCTAssertEqual(image.subdata(in: 0x4000..<0x8000), Data(repeating: 0, count: 0x4000))
+    }
+
+    func testReconstructsFarImageWithoutMaterializingBSSOrKeyPage() throws {
+        var file = makeNSO()
+        putLE(UInt32(0x07000000), at: 0x3c, in: &file)
+        let nso = try NSOImage(data: file)
+        let layout = try NSOPatchLayout.make(segments: nso.segments, bssSize: nso.bssSize)
+
+        XCTAssertTrue(layout.isFar)
+        XCTAssertGreaterThan(layout.keyPageOffset, layout.fileImageLength)
+        let image = try nso.reconstructedImage(from: file, layout: layout)
+        XCTAssertEqual(image.count, Int(layout.fileImageLength))
+        XCTAssertEqual(image.subdata(in: 0..<4), Data(repeating: 0x11, count: 4))
+        XCTAssertEqual(image.subdata(in: 0x20..<0x24), Data(repeating: 0x33, count: 4))
+    }
+
     private func makeNSO() -> Data {
         var data = Data(repeating: 0, count: 0x200)
         data.replaceSubrange(0..<4, with: Data("NSO0".utf8))
