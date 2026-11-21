@@ -25,6 +25,12 @@ final class NSORewriteEmitterTests: XCTestCase {
         XCTAssertEqual(block.words[6], 0x8B010040) // add x0, x2, x1
         XCTAssertEqual(block.fixups, [NSORewriteFixup(byteOffset: 8, key: "K18")])
         XCTAssertEqual(block.data.count, 40)
+        let decodedBlock = try decoder.disassemble(block.data, at: 0x2000)
+        XCTAssertEqual(decodedBlock.count, 10)
+        XCTAssertEqual(decodedBlock[0].mnemonic, "stp")
+        XCTAssertEqual(decodedBlock[2].mnemonic, "adrp")
+        XCTAssertEqual(decodedBlock[6].operandString, "x0, x2, x1")
+        XCTAssertEqual(decodedBlock[9].mnemonic, "b")
     }
 
     func testRejectsStackPointerDestination() throws {
