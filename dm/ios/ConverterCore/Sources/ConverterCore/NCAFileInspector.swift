@@ -14,10 +14,25 @@ public enum NCAFileInspectorError: Error, Equatable {
 public struct NCAFileInspection {
     public let header: NCAHeader
     public let fileSize: UInt64
+    /// Decrypted fixed-size NCA header, retained so validated section FS headers
+    /// can be parsed without reading or decrypting section payloads.
+    public let decryptedHeader: Data
 
-    public init(header: NCAHeader, fileSize: UInt64) {
+    public init(header: NCAHeader, fileSize: UInt64, decryptedHeader: Data) {
         self.header = header
         self.fileSize = fileSize
+        self.decryptedHeader = decryptedHeader
+    }
+
+    public func fileSystemHeader(for section: NCAHeader.Section) throws -> NCAFileSystemHeader {
+        guard header.sections.contains(where: { $0.index == section.index }) else {
+            throw NCAFileSystemHeaderError.invalidSectionIndex(section.index)
+        }
+        return try NCAFileSystemHeader(
+            decryptedNCAHeader: decryptedHeader,
+            sectionIndex: section.index,
+            expectedHash: header.sectionHeaderHashes[section.index]
+        )
     }
 }
 
@@ -56,6 +71,6 @@ public enum NCAFileInspector {
         guard header.magic == "NCA3" else {
             throw NCAFileInspectorError.unsupportedHeaderVersion(header.magic)
         }
-        return NCAFileInspection(header: header, fileSize: fileSize)
+        return NCAFileInspection(header: header, fileSize: fileSize, decryptedHeader: plaintext)
     }
 }

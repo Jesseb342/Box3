@@ -1,5 +1,6 @@
 import Foundation
 import XCTest
+import CryptoKit
 @testable import ConverterCore
 
 final class NCAFileInspectorTests: XCTestCase {
@@ -18,6 +19,11 @@ final class NCAFileInspectorTests: XCTestCase {
         XCTAssertEqual(result.header.contentType, .program)
         XCTAssertEqual(result.header.titleID, 0x010015100B514000)
         XCTAssertEqual(result.header.sections.count, 1)
+        let section = try XCTUnwrap(result.header.sections.first)
+        let fsHeader = try result.fileSystemHeader(for: section)
+        XCTAssertEqual(fsHeader.fileSystemType, .partitionFS)
+        XCTAssertEqual(fsHeader.hashType, .hierarchicalSHA256)
+        XCTAssertEqual(fsHeader.encryptionType, .aesCTR)
     }
 
     func testRejectsMissingHeaderKey() throws {
@@ -56,6 +62,15 @@ final class NCAFileInspectorTests: XCTestCase {
         var plaintext = Data(repeating: 0, count: 0xC00)
         plaintext.replaceSubrange(0x200..<0x204, with: Data("NCA3".utf8))
         plaintext[0x205] = 0
+        let fsOffset = 0x400
+        plaintext[fsOffset] = 2
+        plaintext[fsOffset + 1] = 0
+        plaintext[fsOffset + 2] = 1
+        plaintext[fsOffset + 3] = 2
+        plaintext[fsOffset + 4] = 3
+        let fsHeader = plaintext.subdata(in: fsOffset..<(fsOffset + 0x200))
+        let fsDigest = Data(SHA256.hash(data: fsHeader))
+        plaintext.replaceSubrange(0x280..<0x2A0, with: fsDigest)
         putLE(fileSize, at: 0x208, in: &plaintext)
         putLE(UInt64(0x010015100B514000), at: 0x210, in: &plaintext)
         putLE(UInt32(2), at: 0x240, in: &plaintext)
