@@ -97,13 +97,19 @@ static int boot_env(void) {
     setenv("DM_ROMFS", romfs.fileSystemRepresentation, 0);
     setenv("DM_SAVE", [doc stringByAppendingPathComponent:@"save"].fileSystemRepresentation, 0);
     setenv("DM_TEMP", [doc stringByAppendingPathComponent:@"temp"].fileSystemRepresentation, 0);
-    NSString *dm = [res stringByAppendingPathComponent:@"dm"];
+    NSString *host = [res stringByAppendingPathComponent:@"HostResources"];
+    if (![fm fileExistsAtPath:host]) host = res;   // Nusa stores the runtime resources under HostResources; Box3 packages them at the app root.
+    NSString *dm = [host stringByAppendingPathComponent:@"dm"];
+    if (![fm fileExistsAtPath:dm]) dm = [res stringByAppendingPathComponent:@"dm"];
     setenv("DM_NVN_SHMAP", [dm stringByAppendingPathComponent:@"shader_map.tsv"].fileSystemRepresentation, 0);
-    setenv("DM_MSL_DIR", [res stringByAppendingPathComponent:@"msl"].fileSystemRepresentation, 0);
+    NSString *msl = [host isEqualToString:res] ? [res stringByAppendingPathComponent:@"msl"] : host;
+    setenv("DM_MSL_DIR", msl.fileSystemRepresentation, 0);
     setenv("DM_FONT_DIR", [dm stringByAppendingPathComponent:@"font"].fileSystemRepresentation, 0);   // Shared-font stand-ins (standard.ttf / nintendo_ext.ttf): iOS lacks the macOS font path
-    NSString *aoc = [res stringByAppendingPathComponent:@"aoc"];   // add-on content: build_ipa.sh puts the RomFS extracted from the player's DLC NSPs at <App>/aoc/<index>/
+    NSString *aoc = [res stringByAppendingPathComponent:@"aoc"];
+    if (![fm fileExistsAtPath:aoc]) aoc = [host stringByAppendingPathComponent:@"aoc"];   // add-on content: build_ipa.sh puts the RomFS extracted from the player's DLC NSPs at <App>/aoc/<index>/
     if ([fm fileExistsAtPath:aoc]) setenv("DM_AOC_DIR", aoc.fileSystemRepresentation, 0);
-    NSString *pso = [res stringByAppendingPathComponent:@"pso"];   // the pipeline archive made offline (build_ipa.sh, dm/gfx/tools/pso_offline.py): the shader pairs' bases, which the device then does not build
+    NSString *pso = [host stringByAppendingPathComponent:@"pso"];
+    if (![fm fileExistsAtPath:pso]) pso = [res stringByAppendingPathComponent:@"pso"];   // the pipeline archive made offline (build_ipa.sh, dm/gfx/tools/pso_offline.py): the shader pairs' bases, which the device then does not build
     if ([fm fileExistsAtPath:pso]) setenv("DM_PSO_BUNDLE", pso.fileSystemRepresentation, 0);
     chdir(doc.fileSystemRepresentation);
     g_argv[0] = strdup("dmhost"); g_argv[1] = strdup(dm.fileSystemRepresentation); g_argc = 2;
