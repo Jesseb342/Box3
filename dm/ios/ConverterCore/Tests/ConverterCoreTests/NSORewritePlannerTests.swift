@@ -74,7 +74,7 @@ final class NSORewritePlannerTests: XCTestCase {
             allowUndecodableAddresses: true
         )
         XCTAssertEqual(plan.undecodableAddresses, [4])
-        XCTAssertEqual(plan.sites.map(\\.kind), [.tpidrRead])
+        XCTAssertEqual(plan.sites.map(\.kind), [.tpidrRead])
     }
 
     func testImagePlannerRecoversAfterInvalidWord() throws {
@@ -84,13 +84,14 @@ final class NSORewritePlannerTests: XCTestCase {
             0xfe, 0xde, 0xff, 0xe7, // invalid ARM trap word in this AArch64 context
             0x43, 0xd0, 0x3b, 0xd5  // mrs x3, tpidr_el0
         ])
+        let decoded = try decoder.disassembleRecovering(image)
         let plan = try NSORewritePlanner.plan(
-            image: image,
+            instructions: decoded.instructions,
             codeRanges: [try NSOCodeRange(start: 0, end: 12)],
-            decoder: decoder
+            allowUndecodableAddresses: true
         )
         XCTAssertEqual(plan.undecodableAddresses, [4])
-        XCTAssertEqual(plan.sites.map(\\.kind), [.tpidrRead])
+        XCTAssertEqual(plan.sites.map(\.kind), [.tpidrRead])
     }
 
     func testRejectsOverlappingCodeRanges() throws {
