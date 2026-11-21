@@ -4,13 +4,13 @@ import XCTest
 final class NSORewritePlannerTests: XCTestCase {
     func testClassifiesSystemCallsAndSystemRegisterSites() throws {
         let instructions = [
-            decoded(0xD4001001, "svc", "#0x80"),
-            decoded(0xD53BD043, "mrs", "x3, tpidr_el0"),
-            decoded(0xD51BD047, "msr", "tpidr_el0, x7"),
-            decoded(0xD53BD061, "mrs", "x1, tpidrro_el0"),
-            decoded(0xD53BE025, "mrs", "x5, cntpct_el0"),
-            decoded(0xD53BE046, "mrs", "x6, cntvct_el0"),
-            decoded(0xD53B0027, "mrs", "x7, ctr_el0")
+            decoded(0xD4001001, "svc", "#0x80", address: 0),
+            decoded(0xD53BD043, "mrs", "x3, tpidr_el0", address: 4),
+            decoded(0xD51BD047, "msr", "tpidr_el0, x7", address: 8),
+            decoded(0xD53BD061, "mrs", "x1, tpidrro_el0", address: 12),
+            decoded(0xD53BE025, "mrs", "x5, cntpct_el0", address: 16),
+            decoded(0xD53BE046, "mrs", "x6, cntvct_el0", address: 20),
+            decoded(0xD53B0027, "mrs", "x7, ctr_el0", address: 24)
         ]
         let plan = try NSORewritePlanner.plan(
             instructions: instructions,
