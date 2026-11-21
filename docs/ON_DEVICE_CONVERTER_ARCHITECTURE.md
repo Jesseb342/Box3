@@ -49,6 +49,19 @@ Nusa demonstrates that the user-facing workflow and conversion can live in an iO
 
 Nusa's shader translator is not the BC texture decoder. The A16 limitation is missing native BC texture formats; the Box3 software BC decode/fallback must remain in the new runtime.
 
+### Nusa binary/component map from the public beta analysis
+
+| Nusa component | Observed role | What the new app should learn from it |
+|---|---|---|
+| `NXConverter` | Main conversion executable in the app bundle | Keep conversion orchestration separate from the game runtime; reproduce required formats in our own source |
+| `GameHostTemplate.bin` | Generic game-host/runtime template | Build one generic Box3 host rather than compiling a host executable per game |
+| `ProbeTemplate.bin` | Separate probe/runtime template | Keep any preflight or compatibility-probe role separate from the converter and game host |
+| `Frameworks/GameModules.dylib` | Dynamically loaded rewritten guest modules | Define a versioned module bundle and loader contract for rewritten main/sdk/subsdk modules |
+| `Frameworks/dmsh_xlate_ios.dylib` | Shader translation library, with `dmsh_xlate_translate` / `dmsh_xlate_free` entry points observed in analysis | Study the in-process shader translation boundary; this is not a BC texture decoder |
+| `HostResources/dm`, `HostResources/gl` | Runtime data such as shader maps, MSL, fonts, and configuration | Make runtime resources explicit, relocatable, and validated by a manifest |
+
+The beta's host contained a fatal path for devices without native BC texture formats. That is why the new app must use Box3's BC software fallback in its own generic host. The previous experiment that replaced Nusa's host template is abandoned; none of its modified Nusa files are part of this branch.
+
 ## Proposed app architecture
 
 Keep the app modular. UI code must orchestrate native conversion services and display progress; it must not contain file-format logic.
