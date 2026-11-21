@@ -98,7 +98,7 @@ final class NSORewriteEmitterTests: XCTestCase {
         )
         let decoded = try decoder.disassemble(block.data, at: 0x2000)
         XCTAssertEqual(decoded[6].mnemonic, "tbz")
-        XCTAssertEqual(decoded[6].operandString, "x0, #3, 0x2024")
+        XCTAssertEqual(decoded[6].operandString, "w0, #3, 0x2024")
     }
 
     func testRejectsStackPointerDestination() throws {
