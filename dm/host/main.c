@@ -59,6 +59,28 @@ static uint64_t proc_start_mono_ns(void) {
 static pthread_key_t g_race_keys[512];
 static unsigned g_race_n, g_race_want;
 static void *keyrace_thread(void *unused);
+// Nusa writes the per-game module order to HostResources/dm/modules.txt.
+// The regular Box3 build has no such file and continues to use its profile list.
+static int modules_from_file(const char *dir, const char **names) {
+    char path[1024], line[512];
+    if (snprintf(path, sizeof path, "%s/modules.txt", dir) >= (int)sizeof path) die("modules.txt path too long");
+    FILE *f = fopen(path, "r");
+    if (!f) return 0;
+    int n = 0;
+    while (fgets(line, sizeof line, f)) {
+        char *save = NULL;
+        for (char *t = strtok_r(line, " \\t\\r\\n,;", &save); t; t = strtok_r(NULL, " \\t\\r\\n,;", &save)) {
+            if (t[0] == '#') break;
+            if (n >= MAX_MOD) die("%s: too many modules", path);
+            if (strlen(t) >= 32) die("%s: module name too long: %s", path, t);
+            names[n++] = strdup(t);
+        }
+    }
+    fclose(f);
+    if (n) LOG("module list: %d entries from %s", n, path);
+    return n;
+}
+
 static void host_preload(int argc, char **argv) {
     g_t0_ns = proc_start_mono_ns();
     flags_init();
@@ -92,6 +114,7 @@ static void host_preload(int argc, char **argv) {
         for (char *t = strtok(s, " "); t && g_argc < 63; t = strtok(NULL, " ")) g_argv[g_argc++] = t;
         LOG("game arguments from the game profile: %s", DM_GAME_ARGS);
     }
+    if (!n) n = modules_from_file(argv[1], names);
     if (!n) { static const char *def[] = DM_GAME_MODULES; for (int k = 0; k < DM_GAME_NMOD && n < MAX_MOD; k++) names[n++] = def[k]; }   // default module list from the game profile's modules (Mario: main sdk)
     load_modules(argv[1], names, n);
     dm_sdk_major();   // logs the SDK version, which SDK-dependent behaviour follows (loader.c)
