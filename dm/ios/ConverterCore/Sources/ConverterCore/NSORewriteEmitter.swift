@@ -39,8 +39,8 @@ public struct NSORewriteBlock: Equatable {
     }
 }
 
-/// Emits only the proven, non-stack-adjusting x18 rewrite form from patch_nso.py.
-/// Other site kinds remain inventory-only until their dedicated emitters exist.
+/// Native emitters for the currently proven subset of patch_nso.py rewrite sites.
+/// Unsupported and context-dependent site kinds deliberately have no emitter.
 public enum NSORewriteEmitter {
     public static func emitPlainX18(
         _ site: NSORewriteSite,
