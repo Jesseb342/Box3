@@ -75,6 +75,14 @@ final class NSOImageTests: XCTestCase {
         }
     }
 
+    func testRejectsZeroCompressedSize() {
+        var data = makeNSO(flags: 0b001)
+        putLE(UInt32(0), at: 0x60, in: &data)
+        XCTAssertThrowsError(try NSOImage(data: data)) {
+            XCTAssertEqual($0 as? NSOError, .invalidCompressedSize(0))
+        }
+    }
+
     func testRejectsZeroBuildID() {
         var data = makeNSO()
         data.replaceSubrange(0x40..<0x60, with: Data(repeating: 0, count: 0x20))
