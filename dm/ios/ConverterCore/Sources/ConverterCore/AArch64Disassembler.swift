@@ -91,8 +91,8 @@ public final class AArch64Disassembler {
             instructions.append(DecodedAArch64Instruction(
                 address: pc,
                 word: rawWord,
-                mnemonic: instruction.mnemonic,
-                operandString: instruction.operandString,
+                mnemonic: instruction.mnemonic.lowercased(),
+                operandString: instruction.operandString.lowercased(),
                 registersRead: Set(instruction.regsRead.compactMap(registerName)),
                 registersWritten: Set(instruction.regsWritten.compactMap(registerName)),
                 registersMentioned: Self.registersMentioned(instruction.operandString)
@@ -141,8 +141,8 @@ public final class AArch64Disassembler {
             result.append(DecodedAArch64Instruction(
                 address: instruction.address,
                 word: word,
-                mnemonic: instruction.mnemonic,
-                operandString: instruction.operandString,
+                mnemonic: instruction.mnemonic.lowercased(),
+                operandString: instruction.operandString.lowercased(),
                 registersRead: Set(instruction.regsRead.compactMap(registerName)),
                 registersWritten: Set(instruction.regsWritten.compactMap(registerName)),
                 registersMentioned: Self.registersMentioned(instruction.operandString)
