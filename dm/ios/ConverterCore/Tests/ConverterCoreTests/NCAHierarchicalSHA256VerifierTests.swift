@@ -21,8 +21,7 @@ final class NCAHierarchicalSHA256VerifierTests: XCTestCase {
     func testRejectsMasterHashMismatch() throws {
         let fixture = try makeFixture()
         defer { try? FileManager.default.removeItem(at: fixture.url) }
-        var bad = fixture.superblock
-        bad = try makeSuperblock(masterHash: Data(repeating: 0xFF, count: 0x20))
+        let bad = try makeSuperblock(masterHash: Data(repeating: 0xFF, count: 0x20))
         XCTAssertThrowsError(try NCAHierarchicalSHA256Verifier.verify(
             decryptedSectionURL: fixture.url, sectionSize: fixture.sectionSize, superblock: bad
         )) {
@@ -75,8 +74,6 @@ final class NCAHierarchicalSHA256VerifierTests: XCTestCase {
         section.replaceSubrange(pfsOffset..<(pfsOffset + 4),
                                 with: invalidMagic ? Data("NOPE".utf8) : Data("PFS0".utf8))
         for i in 4..<pfsSize { section[pfsOffset + i] = UInt8(truncatingIfNeeded: i) }
-        if corruptBlock { section[pfsOffset + 0x1000] ^= 0xFF }
-
         let blockSize = 0x1000
         var hashTable = Data()
         for block in 0..<2 {
@@ -87,6 +84,7 @@ final class NCAHierarchicalSHA256VerifierTests: XCTestCase {
         section.replaceSubrange(0..<hashTable.count, with: hashTable)
         let masterHash = Data(SHA256.hash(data: hashTable))
         let superblock = try makeSuperblock(masterHash: masterHash)
+        if corruptBlock { section[pfsOffset + 0x1000] ^= 0xFF }
 
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try section.write(to: url)
