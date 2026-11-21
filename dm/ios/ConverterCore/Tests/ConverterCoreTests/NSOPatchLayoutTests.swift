@@ -23,8 +23,8 @@ final class NSOPatchLayoutTests: XCTestCase {
         XCTAssertTrue(layout.isFar)
         XCTAssertFalse(layout.isBigText)
         XCTAssertEqual(layout.patchOffset, -0x02000000)
-        XCTAssertEqual(layout.keyPageOffset, 0x71010000)
-        XCTAssertEqual(layout.fileImageLength, 0x70010000)
+        XCTAssertEqual(layout.keyPageOffset, 0x07104000)
+        XCTAssertEqual(layout.fileImageLength, 0x07004000)
     }
 
     func testBigTextReducesFrontPlacement() throws {
@@ -44,7 +44,7 @@ final class NSOPatchLayoutTests: XCTestCase {
             bssSize: 0,
             frontOverride: 0x01000000
         )
-        XCTAssertEqual(layout.patchOffset, -0x01000000)
+        XCTAssertEqual(layout.patchOffset, -0x00f00000)
     }
 
     func testRejectsIncorrectSegmentOrder() {
