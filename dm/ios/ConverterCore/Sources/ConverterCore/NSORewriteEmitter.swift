@@ -62,7 +62,7 @@ public enum NSORewriteEmitter {
             operandString: site.operands,
             registersRead: [],
             registersWritten: [],
-            registersMentioned: used.map { "x\\($0)" }.reduce(into: Set<String>()) { $0.insert($1) }
+            registersMentioned: used.map { "x\($0)" }.reduce(into: Set<String>()) { $0.insert($1) }
         )
         let substituted = try AArch64RegisterSubstitution.replaceX18(
             in: original,
@@ -106,7 +106,7 @@ public enum NSORewriteEmitter {
     }
 
     private static func registers(in site: NSORewriteSite) -> Set<Int> {
-        let expression = try! NSRegularExpression(pattern: #"\\b[wx](0|[1-9]|1[0-5]|18)\\b"#)
+        let expression = try! NSRegularExpression(pattern: #"\b[wx](0|[1-9]|1[0-5]|18)\b"#)
         let source = site.operands as NSString
         let range = NSRange(location: 0, length: source.length)
         return Set(expression.matches(in: site.operands, range: range).compactMap {
@@ -118,7 +118,7 @@ public enum NSORewriteEmitter {
         let first = String(operands.split(separator: ",", maxSplits: 1).first ?? "")
             .trimmingCharacters(in: .whitespaces)
         if first == "sp" || first == "wsp" { return true }
-        let pattern = #"\\[sp(?:, [^\\]]+)?\\]!|\\[sp\\],"#
+        let pattern = #"\[sp(?:, [^\]]+)?\]!|\[sp\],"#
         return (try? NSRegularExpression(pattern: pattern).firstMatch(
             in: operands,
             range: NSRange(operands.startIndex..., in: operands)
