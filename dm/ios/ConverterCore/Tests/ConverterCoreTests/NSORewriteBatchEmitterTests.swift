@@ -252,7 +252,7 @@ final class NSORewriteBatchEmitterTests: XCTestCase {
 
     func testBatchEmitsADREwriteAndPreservesAbsoluteAddressSemantics() throws {
         let decoder = try AArch64Disassembler()
-        // Independently assembled ADR x18, #0x1004 at 0x1FFC => 0x3000.
+        // Independently assembled ADR x18, #0x10 at 0x1FFC => 0x200C.
         let siteAddress: UInt64 = 0x1FFC
         let code = Data([0x92, 0x00, 0x00, 0x10])
         let instruction = try XCTUnwrap(decoder.disassemble(code, at: siteAddress).first)
@@ -293,7 +293,7 @@ final class NSORewriteBatchEmitterTests: XCTestCase {
             pc: Int64(layout.patchOffset) + 20
         )
         let lowOffset = Int((patchInstructions[6].word >> 10) & 0xFFF)
-        XCTAssertEqual(targetPage + Int64(lowOffset), 0x3000)
+        XCTAssertEqual(targetPage + Int64(lowOffset), 0x200C)
         XCTAssertEqual(patchInstructions[8].mnemonic, "ldp")
         XCTAssertEqual(patchInstructions[9].mnemonic, "b")
         XCTAssertEqual(branchTarget(patchInstructions[9].word,
