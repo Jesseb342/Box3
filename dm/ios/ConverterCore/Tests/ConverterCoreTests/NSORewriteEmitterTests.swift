@@ -144,6 +144,53 @@ final class NSORewriteEmitterTests: XCTestCase {
         ])
     }
 
+    func testEmitsADRAcrossPageBoundaryAndPreservesLowOffset() throws {
+        let decoder = try AArch64Disassembler()
+        // ADR x18, #8 at 0x1FFC resolves to 0x2004, across a 4 KiB page.
+        let immediate = UInt32(8)
+        let word = UInt32(0x10000000) |
+            ((immediate & 0x3) << 29) |
+            (((immediate >> 2) & 0x7FFFF) << 5) | 18
+        let code = Data((0..<4).map { UInt8(truncatingIfNeeded: word >> ($0 * 8)) })
+        let instruction = try XCTUnwrap(decoder.disassemble(code, at: 0x1FFC).first)
+        let plan = try NSORewritePlanner.plan(
+            instructions: [instruction],
+            codeRanges: [try NSOCodeRange(start: 0x1FFC, end: 0x2000)]
+        )
+        let site = try XCTUnwrap(plan.sites.first)
+        let block = try NSORewriteEmitter.emitX18PCRelative(
+            site, patchAddress: 0x4000, keyPageOffset: 0x8000, decoder: decoder
+        )
+        let decoded = try decoder.disassemble(block.data, at: 0x4000)
+        XCTAssertEqual(decoded[5].mnemonic, "adrp")
+        XCTAssertEqual(decoded[5].operandString, "x0, #0x2000")
+        XCTAssertEqual(decoded[6].operandString, "x0, x0, #4")
+    }
+
+    func testEmitsADRPBackwardAcrossPageBoundary() throws {
+        let decoder = try AArch64Disassembler()
+        // ADRP x18, #-1 page at 0x2004 resolves to the previous page, 0x1000.
+        let immediate = UInt32(bitPattern: Int32(-1)) & 0x1FFFFF
+        let word = UInt32(0x90000000) |
+            ((immediate & 0x3) << 29) |
+            (((immediate >> 2) & 0x7FFFF) << 5) | 18
+        let code = Data((0..<4).map { UInt8(truncatingIfNeeded: word >> ($0 * 8)) })
+        let instruction = try XCTUnwrap(decoder.disassemble(code, at: 0x2004).first)
+        let plan = try NSORewritePlanner.plan(
+            instructions: [instruction],
+            codeRanges: [try NSOCodeRange(start: 0x2004, end: 0x2008)]
+        )
+        let site = try XCTUnwrap(plan.sites.first)
+        let block = try NSORewriteEmitter.emitX18PCRelative(
+            site, patchAddress: 0x5000, keyPageOffset: 0x9000, decoder: decoder
+        )
+        let decoded = try decoder.disassemble(block.data, at: 0x5000)
+        XCTAssertEqual(decoded[5].mnemonic, "adrp")
+        XCTAssertEqual(decoded[5].operandString, "x0, #0x1000")
+        XCTAssertEqual(decoded[6].mnemonic, "str")
+        XCTAssertEqual(decoded[7].mnemonic, "ldp")
+    }
+
     func testRejectsStackPointerDestination() throws {
         let site = NSORewriteSite(
             address: 0x1000,
