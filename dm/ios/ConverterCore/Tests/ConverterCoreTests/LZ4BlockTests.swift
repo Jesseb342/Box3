@@ -10,7 +10,7 @@ final class LZ4BlockTests: XCTestCase {
 
     func testDecodesOverlappingMatch() throws {
         // "abc" followed by a length-9 match at offset 3 -> "abcabcabcabc".
-        let encoded = Data([0x32, 0x61, 0x62, 0x63, 0x03, 0x00])
+        let encoded = Data([0x35, 0x61, 0x62, 0x63, 0x03, 0x00])
         XCTAssertEqual(
             try LZ4Block.decompress(encoded, expectedSize: 12),
             Data("abcabcabcabc".utf8)
