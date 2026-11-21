@@ -53,6 +53,15 @@ public struct NCAFileSystemHeader: Equatable {
     public let extensionData: Data
     public let trailingData: Data
 
+    /// Interprets the hierarchical-SHA256 hash data for a PFS0 section.
+    /// Region offsets are relative to the start of this NCA section.
+    public func partitionFSSuperblock(sectionSize: UInt64) throws -> NCAHierarchicalSHA256Superblock {
+        guard fileSystemType == .partitionFS, hashType == .hierarchicalSHA256 else {
+            throw NCAHierarchicalSHA256SuperblockError.invalidHashDataLength(0)
+        }
+        return try NCAHierarchicalSHA256Superblock(hashData: hashData, sectionSize: sectionSize)
+    }
+
     /// Parses one section header from the already-decrypted 0xC00-byte NCA3
     /// header. The section index selects both its 0x200-byte FS header and the
     /// corresponding SHA-256 digest in the NCA header.
