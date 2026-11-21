@@ -56,12 +56,12 @@ public struct NSOImage: Equatable {
             let memorySize = Self.u32(data, descriptor + 8)
             let storedSize = Self.u32(data, 0x60 + index * 4)
             let compressed = (flags & (1 << index)) != 0
-            let actualStoredSize = compressed ? storedSize : memorySize
+            let actualStoredSize = storedSize
 
             guard memorySize > 0, actualStoredSize > 0 else {
                 throw NSOError.invalidSegmentRange(index)
             }
-            guard UInt64(fileOffset) + UInt64(actualStoredSize) <= UInt64(data.count) else {
+            guard fileOffset >= 0x70,\n                  UInt64(fileOffset) + UInt64(actualStoredSize) <= UInt64(data.count) else {
                 throw NSOError.segmentOutsideFile(index)
             }
             if compressed && storedSize == 0 {
