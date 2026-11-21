@@ -45,8 +45,16 @@ static int load_external_game_modules(void) {
 static NSString *romfs_locate(void) {
     NSFileManager *fm = NSFileManager.defaultManager;
     NSString *doc = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES)[0];
-    for (NSString *d in @[[doc stringByAppendingPathComponent:@"romfs"], [NSBundle.mainBundle.resourcePath stringByAppendingPathComponent:@"romfs"]])
-        if ([fm fileExistsAtPath:[d stringByAppendingPathComponent:@DM_GAME_ROMFS_MARKER]]) return d;   // only a directory containing the game profile's romfs_marker path counts (Mario: System/Resource, the resource size table)
+    NSString *res = NSBundle.mainBundle.resourcePath;
+    // Nusa's converter packages a standard RomFS image as romfs.img. Prefer the
+    // user-managed Documents copy, then the bundled image; older Box3 packages
+    // continue to work with a marker-checked romfs directory.
+    for (NSString *p in @[[doc stringByAppendingPathComponent:@"romfs.img"],
+                          [res stringByAppendingPathComponent:@"romfs.img"]])
+        if ([fm fileExistsAtPath:p]) return p;
+    for (NSString *d in @[[doc stringByAppendingPathComponent:@"romfs"],
+                          [res stringByAppendingPathComponent:@"romfs"]])
+        if ([fm fileExistsAtPath:[d stringByAppendingPathComponent:@DM_GAME_ROMFS_MARKER]]) return d;
     return nil;
 }
 
