@@ -27,7 +27,8 @@ public enum AArch64Encoder {
     }
 
     public static func b(from: Int64, to: Int64) throws -> UInt32 {
-        let delta = to - from
+        let (delta, overflow) = to.subtractingReportingOverflow(from)
+        guard !overflow else { throw AArch64EncodingError.branchOutOfRange }
         guard delta % 4 == 0 else { throw AArch64EncodingError.unalignedBranch }
         guard let immediate = signed(Int(delta / 4), bits: 26) else {
             throw AArch64EncodingError.branchOutOfRange
@@ -65,7 +66,7 @@ public enum AArch64Encoder {
             throw AArch64EncodingError.invalidImmediate
         }
         return opcode | ((immediate & 0x7f) << 15) |
-            (try reg(second) << 10) | (try reg(base) << 5) | reg(first)
+            (try reg(second) << 10) | (try reg(base) << 5) | (try reg(first))
     }
 
     public static func stur(_ target: Int, base: Int, offset: Int) throws -> UInt32 {
@@ -81,7 +82,7 @@ public enum AArch64Encoder {
             throw AArch64EncodingError.invalidImmediate
         }
         return opcode | ((immediate & 0x1ff) << 12) |
-            (try reg(base) << 5) | reg(target)
+            (try reg(base) << 5) | (try reg(target))
     }
 
     public static func ldrX(_ target: Int, base: Int, immediate12: Int = 0) throws -> UInt32 {
@@ -126,7 +127,7 @@ public enum AArch64Encoder {
             throw AArch64EncodingError.invalidImmediate
         }
         return opcode | (shift12 ? (1 << 22) : 0) |
-            (UInt32(immediate) << 10) | (try reg(source) << 5) | reg(destination)
+            (UInt32(immediate) << 10) | (try reg(source) << 5) | (try reg(destination))
     }
 
     public static func addRegister(_ destination: Int, source: Int, operand: Int) throws -> UInt32 {
