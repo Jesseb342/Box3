@@ -56,7 +56,11 @@ func run() throws {
     let key = try decodeHex(keyText)
     let actual = try AESXTS.decryptNCAHeader(encrypted, headerKey: key)
     guard actual == reference else {
-        let mismatch = zip(actual, reference).firstIndex { $0.0 != $0.1 } ?? 0
+        var mismatch = 0
+        for index in 0..<actual.count where actual[index] != reference[index] {
+            mismatch = index
+            break
+        }
         let actualByte = actual[mismatch]
         let expectedByte = reference[mismatch]
         fputs(
