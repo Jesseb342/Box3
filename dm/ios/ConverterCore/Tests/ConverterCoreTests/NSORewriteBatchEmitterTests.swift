@@ -138,11 +138,11 @@ final class NSORewriteBatchEmitterTests: XCTestCase {
                 ),
                 NSORewriteSite(
                     address: 0x1004,
-                    kind: .x18Conditional,
+                    kind: .x18IndirectBranch,
                     argument: nil,
-                    instructionWord: 0xB4000052,
-                    mnemonic: "cbz",
-                    operands: "x18, #0x1010"
+                    instructionWord: 0xD61F0240,
+                    mnemonic: "br",
+                    operands: "x18"
                 )
             ],
             counts: [.x18Plain: 1, .svc: 1],
@@ -162,7 +162,7 @@ final class NSORewriteBatchEmitterTests: XCTestCase {
             layout: layout,
             decoder: try AArch64Disassembler()
         )) {
-            XCTAssertEqual($0 as? NSORewriteBatchError, .unsupportedSite(.x18Conditional, 0x1004))
+            XCTAssertEqual($0 as? NSORewriteBatchError, .unsupportedSite(.x18IndirectBranch, 0x1004))
         }
     }
 
