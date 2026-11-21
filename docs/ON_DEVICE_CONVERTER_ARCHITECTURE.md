@@ -76,8 +76,8 @@ Keep the app modular. UI code must orchestrate native conversion services and di
 2. **Package and content reader (native library)**
    - Read PFS0/HFS0 containers and XCI secure partitions.
    - Parse tickets, key sets, NCA headers/sections, and content metadata.
-   - The raw NCA header (0xC00 bytes) is AES-XTS encrypted in 0x200-byte sectors; its tweak byte order is non-standard. The new `NCAHeader` type parses only the decrypted header and must not be mistaken for a decryption implementation.
-   - Implement and regression-test the NCA AES-XTS header decryptor against known vectors and legally owned fixture NCAs before attempting content-section crypto.
+   - The raw NCA header (0xC00 bytes) is AES-XTS encrypted as six 0x200-byte data units. The XTS data-unit number is encoded using Nintendo's big-endian tweak convention (distinct from IEEE 1619's little-endian sequence-number representation). The new `AESXTS` implementation uses CommonCrypto's AES-ECB primitive and implements the XTS transform in Swift; `NCAHeader` continues to parse plaintext only.
+   - The implementation is covered by an IEEE 1619 known-answer vector and a Nintendo sector-tweak layout test. It still needs comparison against hactool/LibHac output from a legally owned NCA fixture before it is treated as validated NCA decryption.
    - Then implement NCA key-area decryption, title-key/ticket handling, AES-CTR/AES-CTR-Ex section reads, integrity verification, and BKTR update overlays. These are separate crypto/storage layers, not one generic decrypt operation.
    - Decrypt and verify NCA content; layer the selected update over the base program; extract DLC independently.
    - Preserve control metadata (NACP, icon, version, title ID) for the generated app.
@@ -154,4 +154,4 @@ Keep the app modular. UI code must orchestrate native conversion services and di
 
 ## Immediate next engineering task
 
-Build the Gate A inventory as machine-readable contracts: list each current stage, its inputs/outputs, implementation language, desktop-only dependency, and iOS replacement. Then select the first native extraction slice (PFS0 container parsing plus key-file parsing) and create its iOS library and fixture tests. Do not start by writing a cosmetic app shell around an incomplete converter.
+Continue Gate B with independent NCA crypto layers: validate the new AES-XTS implementation against the IEEE vector, compare decrypted header bytes with hactool/LibHac on a legally owned fixture, then add NCA key-area and title-key handling. Do not proceed to CTR sections until the header and key derivation stages have byte-for-byte reference tests.
