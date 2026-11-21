@@ -189,7 +189,19 @@ public enum NSORewriteEmitter {
         let scratch = (0..<16).filter { !used.contains($0) }
         guard scratch.count >= 2 else { throw NSORewriteEmissionError.insufficientScratchRegisters }
         let s = scratch[0], t = scratch[1]
-        let substituted = try AArch64RegisterSubstitution.replaceX18(in: original, with: s, decoder: decoder)
+        // In CBZ/CBNZ/TBZ/TBNZ the tested register is encoded exclusively in
+        // bits 0...4. Do not run the generic register-field scanner here: the
+        // immediate also contains bit patterns that resemble register fields.
+        let substituted = (word & ~UInt32(31)) | UInt32(s)
+        var substitutedBytes = Data()
+        var substitutedLE = substituted.littleEndian
+        withUnsafeBytes(of: &substitutedLE) { substitutedBytes.append(contentsOf: $0) }
+        guard let substitutedInstruction = try decoder.disassemble(substitutedBytes, at: site.address).first,
+              substitutedInstruction.mnemonic == original.mnemonic,
+              substitutedInstruction.registersMentioned.contains("x\\(s)") ||
+                substitutedInstruction.registersMentioned.contains("w\\(s)") else {
+            throw NSORewriteEmissionError.siteInstructionMismatch
+        }
         let originalTarget = try conditionalTarget(word: word, address: Int64(site.address), compareBranch: isCompareBranch)
         var words = [
             try AArch64Encoder.stp(s, t, base: 31, offset: -16),
