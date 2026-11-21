@@ -27,18 +27,18 @@ static int load_external_game_modules(void) {
     g_external_modules_handle = dlopen(path.fileSystemRepresentation, RTLD_NOW);
     if (!g_external_modules_handle) {
         const char *why = dlerror();
-        fprintf(stderr, "[RED] boot: dlopen(%s) failed: %s\\n", path.fileSystemRepresentation, why ? why : "unknown");
+        fprintf(stderr, "[RED] boot: dlopen(%s) failed: %s\n", path.fileSystemRepresentation, why ? why : "unknown");
         return 0;
     }
     for (uint32_t i = _dyld_image_count(); i > 0; i--) {
         const char *name = _dyld_get_image_name(i - 1);
         if (name && strstr(name, "GameModules.dylib")) {
             dm_module_image_set(_dyld_get_image_header(i - 1));
-            fprintf(stderr, "boot: loaded external game modules from %s\\n", name);
+            fprintf(stderr, "boot: loaded external game modules from %s\n", name);
             return 1;
         }
     }
-    fprintf(stderr, "[RED] boot: GameModules.dylib loaded but its dyld image was not found\\n");
+    fprintf(stderr, "[RED] boot: GameModules.dylib loaded but its dyld image was not found\n");
     return 0;
 }
 
@@ -99,7 +99,8 @@ static int boot_env(void) {
     if ([fm fileExistsAtPath:pso]) setenv("DM_PSO_BUNDLE", pso.fileSystemRepresentation, 0);
     chdir(doc.fileSystemRepresentation);
     g_argv[0] = strdup("dmhost"); g_argv[1] = strdup(dm.fileSystemRepresentation); g_argc = 2;
-    if (!load_external_game_modules()) return 0;\n    dm_host_preload_start(g_argc, g_argv);   // Module tables / relocation / takeover run early in the background, in parallel with UIKit startup (and the launcher: the settings it sets are read when the game starts)
+    if (!load_external_game_modules()) return 0;
+    dm_host_preload_start(g_argc, g_argv);   // Module tables / relocation / takeover run early in the background, in parallel with UIKit startup (and the launcher: the settings it sets are read when the game starts)
     return 1;
 }
 static int g_boot_ok;
