@@ -121,8 +121,16 @@ public enum NSORewriteEmitter {
         let key: String
         let keyIndex: Int
         switch site.kind {
-        case .tpidrRead: key = "KTLS"; keyIndex = 1
-        case .tpidrroRead: key = "KTLR"; keyIndex = 2
+        case .tpidrRead:
+            guard site.instructionWord & 0xFFFFFFE0 == 0xD53BD040 else {
+                throw NSORewriteEmissionError.siteInstructionMismatch
+            }
+            key = "KTLS"; keyIndex = 1
+        case .tpidrroRead:
+            guard site.instructionWord & 0xFFFFFFE0 == 0xD53BD060 else {
+                throw NSORewriteEmissionError.siteInstructionMismatch
+            }
+            key = "KTLR"; keyIndex = 2
         default: throw NSORewriteEmissionError.unsupportedSite(site.kind)
         }
         let destination = Int(site.instructionWord & 31)
@@ -157,6 +165,9 @@ public enum NSORewriteEmitter {
     ) throws -> NSORewriteBlock {
         guard site.kind == .tpidrWrite else {
             throw NSORewriteEmissionError.unsupportedSite(site.kind)
+        }
+        guard site.instructionWord & 0xFFFFFFE0 == 0xD51BD040 else {
+            throw NSORewriteEmissionError.siteInstructionMismatch
         }
         let source = Int(site.instructionWord & 31)
         guard let scratch = (0..<16).first(where: { $0 != source }),
