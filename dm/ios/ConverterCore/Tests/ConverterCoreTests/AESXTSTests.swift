@@ -40,6 +40,23 @@ final class AESXTSTests: XCTestCase {
         }
     }
 
+
+    func testNCAHeaderDecryptsSixNintendoSectors() throws {
+        let key = Data((0..<32).map { UInt8($0 + 1) })
+        let plaintext = Data((0..<0xC00).map { UInt8(($0 * 13) & 0xff) })
+        var encrypted = Data()
+        for sector in 0..<6 {
+            let start = sector * 0x200
+            let clear = plaintext.subdata(in: start..<(start + 0x200))
+            encrypted.append(try AESXTS.encrypt(
+                dataUnit: clear,
+                combinedKey: key,
+                tweak: AESXTS.ncaSectorTweak(UInt64(sector))
+            ))
+        }
+        XCTAssertEqual(try AESXTS.decryptNCAHeader(encrypted, headerKey: key), plaintext)
+    }
+
     func testRejectsWrongHeaderLength() {
         XCTAssertThrowsError(
             try AESXTS.decryptNCAHeader(Data(repeating: 0, count: 0xA00), headerKey: Data(repeating: 0, count: 32))
