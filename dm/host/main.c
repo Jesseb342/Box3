@@ -71,6 +71,7 @@ static int modules_from_file(const char *dir, const char **names) {
         char *save = NULL;
         for (char *t = strtok_r(line, " \\t\\r\\n,;", &save); t; t = strtok_r(NULL, " \\t\\r\\n,;", &save)) {
             if (t[0] == '#') break;
+            if (!strcmp(t, "rtld")) continue;   // Horizon's rtld is not a guest module image.
             if (n >= MAX_MOD) die("%s: too many modules", path);
             if (strlen(t) >= 32) die("%s: module name too long: %s", path, t);
             names[n++] = strdup(t);
