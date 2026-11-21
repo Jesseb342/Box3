@@ -14,6 +14,7 @@ public struct NSORewriteBatchResult {
     public let fileData: Data
     public let patchData: Data
     public let fixups: [NSORewriteFixup]
+    public let gates: [NSORewriteGate]
     public let patchedSiteCount: Int
 }
 
@@ -37,7 +38,11 @@ public enum NSORewriteBatchEmitter {
         guard plan.undecodableAddresses.isEmpty else {
             throw NSORewriteBatchError.containsUndecodableInstructions(plan.undecodableAddresses)
         }
-        let supported: Set<NSORewriteSiteKind> = [.x18Plain, .tpidrRead, .tpidrroRead, .tpidrWrite]
+        let supported: Set<NSORewriteSiteKind> = [
+            .x18Plain, .tpidrRead, .tpidrroRead, .tpidrWrite,
+            .svc, .counterPhysicalRead, .counterVirtualRead,
+            .stackAlignment, .cacheTypeRead
+        ]
         for site in plan.sites where !supported.contains(site.kind) {
             throw NSORewriteBatchError.unsupportedSite(site.kind, site.address)
         }
@@ -48,6 +53,7 @@ public enum NSORewriteBatchEmitter {
         var image = baseImage
         var patch = Data()
         var fixups: [NSORewriteFixup] = []
+        var gates: [NSORewriteGate] = []
         for site in plan.sites.sorted(by: { $0.address < $1.address }) {
             guard site.address <= UInt64(image.count),
                   UInt64(image.count) - site.address >= 4 else {
@@ -61,6 +67,15 @@ public enum NSORewriteBatchEmitter {
                     expected: site.instructionWord,
                     actual: actual
                 )
+            }
+
+            if site.kind == .cacheTypeRead {
+                let register = site.argument ?? 32
+                guard register != 18, register <= 31 else {
+                    throw NSORewriteBatchError.unsupportedSite(site.kind, site.address)
+                }
+                writeUInt32LE(0xD2A00080 | register, to: &image, at: offset)
+                continue
             }
 
             let patchAddress = try currentPatchAddress(
@@ -88,6 +103,17 @@ public enum NSORewriteBatchEmitter {
                     patchAddress: patchAddress,
                     keyPageOffset: Int64(layout.keyPageOffset)
                 )
+            case .svc, .counterPhysicalRead, .counterVirtualRead:
+                block = try NSORewriteEmitter.emitHostGate(
+                    site,
+                    patchAddress: patchAddress,
+                    keyPageOffset: Int64(layout.keyPageOffset)
+                )
+            case .stackAlignment:
+                block = try NSORewriteEmitter.emitStackAlignment(
+                    site,
+                    patchAddress: patchAddress
+                )
             default:
                 throw NSORewriteBatchError.unsupportedSite(site.kind, site.address)
             }
@@ -98,6 +124,7 @@ public enum NSORewriteBatchEmitter {
                 ))
             }
             patch.append(block.data)
+            if let gate = block.gate { gates.append(gate) }
             writeUInt32LE(block.siteBranchWord, to: &image, at: offset)
         }
 
@@ -127,6 +154,7 @@ public enum NSORewriteBatchEmitter {
             fileData: output,
             patchData: patch,
             fixups: fixups,
+            gates: gates,
             patchedSiteCount: plan.sites.count
         )
     }
