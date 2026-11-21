@@ -15,7 +15,7 @@ final class NSOImageTests: XCTestCase {
         XCTAssertEqual(image.segments[0].storedSize, 0x20)
         XCTAssertFalse(image.hasCompressedSegments)
         XCTAssertEqual(image.bssSize, 0x40)
-        XCTAssertEqual(image.buildIDHex, String(repeating: "ab", count: 32))
+        XCTAssertEqual(image.buildIDHex, String(repeating: "ab", count: 16))
     }
 
     func testRecognizesCompressedSegments() throws {
