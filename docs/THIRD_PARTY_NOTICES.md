@@ -8,7 +8,7 @@ Capstone and provides a Swift Package Manager wrapper.
 
 - Upstream project: https://github.com/capstone-engine/capstone
 - Wrapper package: https://github.com/Lakr233/libcapstone-spm
-- Version requirement: 0.1.3 or compatible 0.x release
+- Version pin: 0.1.3
 - License: BSD 3-Clause
 
 The BSD 3-Clause license requires retaining the copyright notice, conditions,
