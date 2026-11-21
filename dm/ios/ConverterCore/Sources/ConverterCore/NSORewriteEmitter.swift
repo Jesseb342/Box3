@@ -63,7 +63,7 @@ public enum NSORewriteEmitter {
             operandString: site.operands,
             registersRead: [],
             registersWritten: [],
-            registersMentioned: used.map { "x\($0)" }.reduce(into: Set<String>()) { $0.insert($1) }
+            registersMentioned: Set(used.map { "x\($0)" })
         )
         let substituted = try AArch64RegisterSubstitution.replaceX18(
             in: original,
