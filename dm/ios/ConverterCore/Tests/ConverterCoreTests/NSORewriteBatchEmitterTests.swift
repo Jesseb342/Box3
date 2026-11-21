@@ -65,7 +65,8 @@ final class NSORewriteBatchEmitterTests: XCTestCase {
                     operands: "#0x80"
                 )
             ],
-            counts: [.x18Plain: 1, .svc: 1]
+            counts: [.x18Plain: 1, .svc: 1],
+            undecodableAddresses: []
         )
         let layout = try NSOPatchLayout.make(
             segments: [
