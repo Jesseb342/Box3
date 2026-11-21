@@ -66,7 +66,7 @@ public enum AArch64RegisterSubstitution {
         return expression.stringByReplacingMatches(
             in: operands,
             range: range,
-            withTemplate: "$1\(register)"
+            withTemplate: "${1}\(register)"
         )
     }
 }
