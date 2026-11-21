@@ -51,10 +51,10 @@ final class NSORewriteBatchEmitterTests: XCTestCase {
             0x40, 0x02, 0x01, 0x8b, // add x0, x18, x1
             0x43, 0xd0, 0x3b, 0xd5  // mrs x3, tpidr_el0
         ])
+        let instructions = try decoder.disassemble(code)
         let plan = try NSORewritePlanner.plan(
-            image: code,
-            codeRanges: [try NSOCodeRange(start: 0, end: 8)],
-            decoder: decoder
+            instructions: instructions,
+            codeRanges: [try NSOCodeRange(start: 0, end: 8)]
         )
         let layout = try NSOPatchLayout.make(
             segments: [
@@ -98,10 +98,10 @@ final class NSORewriteBatchEmitterTests: XCTestCase {
             0x27, 0x00, 0x3b, 0xd5  // mrs x7, ctr_el0
         ])
         base.replaceSubrange(0x1000..<0x1010, with: code)
+        let instructions = try decoder.disassemble(code, at: 0x1000)
         let plan = try NSORewritePlanner.plan(
-            image: base,
-            codeRanges: [try NSOCodeRange(start: 0x1000, end: 0x1010)],
-            decoder: decoder
+            instructions: instructions,
+            codeRanges: [try NSOCodeRange(start: 0x1000, end: 0x1010)]
         )
         let result = try NSORewriteBatchEmitter.emitSupportedSites(
             baseImage: base,
