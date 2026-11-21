@@ -51,6 +51,8 @@ public struct NCAFileSystemHeader: Equatable {
     public let metadataHashType: UInt8
     public let hashData: Data
     public let extensionData: Data
+    /// Eight-byte section CTR seed stored at FS-header offset 0x140.
+    public let sectionCounter: Data
     public let trailingData: Data
 
     /// Interprets the hierarchical-SHA256 hash data for a PFS0 section.
@@ -108,6 +110,7 @@ public struct NCAFileSystemHeader: Equatable {
         self.metadataHashType = raw[5]
         self.hashData = raw.subdata(in: 0x8..<0x100)
         self.extensionData = raw.subdata(in: 0x100..<0x140)
-        self.trailingData = raw.subdata(in: 0x140..<0x200)
+        self.sectionCounter = raw.subdata(in: 0x140..<0x148)
+        self.trailingData = raw.subdata(in: 0x148..<0x200)
     }
 }

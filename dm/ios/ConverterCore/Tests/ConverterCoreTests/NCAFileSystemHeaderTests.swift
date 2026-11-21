@@ -15,7 +15,7 @@ final class NCAFileSystemHeaderTests: XCTestCase {
         data[offset + 5] = 1
         data[offset + 8] = 0xA5
         data[offset + 0x100] = 0x5A
-        data[offset + 0x140] = 0xC3
+        for i in 0..<8 { data[offset + 0x140 + i] = UInt8(0xC3 + i) }
         let raw = data.subdata(in: offset..<(offset + 0x200))
         let digest = Data(SHA256.hash(data: raw))
 
@@ -35,8 +35,9 @@ final class NCAFileSystemHeaderTests: XCTestCase {
         XCTAssertEqual(header.hashData[0], 0xA5)
         XCTAssertEqual(header.extensionData.count, 0x40)
         XCTAssertEqual(header.extensionData[0], 0x5A)
-        XCTAssertEqual(header.trailingData.count, 0xC0)
-        XCTAssertEqual(header.trailingData[0], 0xC3)
+        XCTAssertEqual(header.sectionCounter, Data((0xC3...0xCA).map(UInt8.init)))
+        XCTAssertEqual(header.trailingData.count, 0xB8)
+        XCTAssertEqual(header.trailingData[0], 0)
     }
 
     func testRejectsHeaderHashMismatch() throws {
