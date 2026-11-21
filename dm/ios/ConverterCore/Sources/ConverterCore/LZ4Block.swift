@@ -78,11 +78,12 @@ public enum LZ4Block {
             guard offset != 0 else { throw LZ4BlockError.zeroMatchOffset }
             guard offset <= output.count else { throw LZ4BlockError.matchBeforeOutput }
 
-            let matchBase = Int(token & 0x0f) + 4
-            let matchLength = try readExtendedLength(
-                base: matchBase,
+            let matchNibble = Int(token & 0x0f)
+            let encodedMatchLength = try readExtendedLength(
+                base: matchNibble,
                 error: .truncatedMatchLength
             )
+            let matchLength = encodedMatchLength + 4
             guard matchLength <= expectedSize - output.count else {
                 throw LZ4BlockError.outputExceedsExpectedSize
             }
