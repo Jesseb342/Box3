@@ -7,7 +7,7 @@ final class AESXTSTests: XCTestCase {
         // IEEE Std 1619-2007 Annex B, Vector 2.
         let key = Data(repeating: 0x11, count: 16) + Data(repeating: 0x22, count: 16)
         let plaintext = Data(repeating: 0x44, count: 32)
-        let sequenceNumber: UInt64 = 3_333_333_333
+        let sequenceNumber: UInt64 = 0x3333333333
         var tweak = Data(repeating: 0, count: 16)
         var value = sequenceNumber
         for index in 0..<8 {
