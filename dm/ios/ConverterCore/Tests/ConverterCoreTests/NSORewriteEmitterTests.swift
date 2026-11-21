@@ -101,6 +101,49 @@ final class NSORewriteEmitterTests: XCTestCase {
         XCTAssertEqual(decoded[6].operandString, "w0, #3, 0x2024")
     }
 
+    func testEmitsADRX18AndPreservesAbsoluteTarget() throws {
+        let decoder = try AArch64Disassembler()
+        let instruction = try XCTUnwrap(decoder.disassemble(
+            Data([0x92, 0x00, 0x00, 0x10]), at: 0x1000
+        ).first)
+        let plan = try NSORewritePlanner.plan(
+            instructions: [instruction],
+            codeRanges: [try NSOCodeRange(start: 0x1000, end: 0x1004)]
+        )
+        let site = try XCTUnwrap(plan.sites.first)
+        XCTAssertEqual(site.kind, .x18PCRelative)
+        let block = try NSORewriteEmitter.emitX18PCRelative(
+            site, patchAddress: 0x2000, keyPageOffset: 0x8000, decoder: decoder
+        )
+        XCTAssertEqual(block.fixups, [NSORewriteFixup(byteOffset: 8, key: "K18")])
+        let decoded = try decoder.disassemble(block.data, at: 0x2000)
+        XCTAssertEqual(decoded.map(\.mnemonic), [
+            "stp", "mrs", "adrp", "ldr", "add", "adrp", "add", "str", "ldp", "b"
+        ])
+        XCTAssertEqual(decoded[6].operandString, "x0, x0, #0x10")
+    }
+
+    func testEmitsADRPX18AndPreservesPageTarget() throws {
+        let decoder = try AArch64Disassembler()
+        let instruction = try XCTUnwrap(decoder.disassemble(
+            Data([0x32, 0x00, 0x00, 0x90]), at: 0x1000
+        ).first)
+        let plan = try NSORewritePlanner.plan(
+            instructions: [instruction],
+            codeRanges: [try NSOCodeRange(start: 0x1000, end: 0x1004)]
+        )
+        let site = try XCTUnwrap(plan.sites.first)
+        XCTAssertEqual(site.kind, .x18PCRelative)
+        let block = try NSORewriteEmitter.emitX18PCRelative(
+            site, patchAddress: 0x2000, keyPageOffset: 0x8000, decoder: decoder
+        )
+        XCTAssertEqual(block.fixups, [NSORewriteFixup(byteOffset: 8, key: "K18")])
+        let decoded = try decoder.disassemble(block.data, at: 0x2000)
+        XCTAssertEqual(decoded.map(\.mnemonic), [
+            "stp", "mrs", "adrp", "ldr", "add", "adrp", "str", "ldp", "b"
+        ])
+    }
+
     func testRejectsStackPointerDestination() throws {
         let site = NSORewriteSite(
             address: 0x1000,
