@@ -20,10 +20,12 @@ enum { R8U = 10, R8S = 12, RG8U = 30, RG8S = 32, RGBA8 = 70, RGBA8_S = 71, RG11B
 uint32_t bc_soft_target(uint32_t pf, int *bpp) {
     uint32_t o; int b;
     switch (pf) {
-        // ASTC 4x4: 16 bytes per 4x4 block, 1 byte a pixel instead of RGBA8's 4 (BC1's 0.5 grew 8 times); b = 4 keeps the row pitch the callers compute ((w + 3) / 4 * 4 * b = 16 bytes per block),
-        // bc_soft_rows gives the rows: one per block row
-        case BC1: case BC2: case BC3: case BC7: o = nvn_bc_astc ? ASTC4 : RGBA8; b = 4; break;
-        case BC1_S: case BC2_S: case BC3_S: case BC7_S: o = nvn_bc_astc ? ASTC4_S : RGBA8_S; b = 4; break;
+        // BC1–BC3 use compact ASTC when enabled; BC7 stays RGBA8 to preserve its multi-partition detail.
+        // b = 4 makes the upload pitch 16 bytes per ASTC block or 4 RGBA bytes per pixel.
+        case BC1: case BC2: case BC3: o = nvn_bc_astc ? ASTC4 : RGBA8; b = 4; break;
+        case BC1_S: case BC2: case BC3_S: o = nvn_bc_astc ? ASTC4_S : RGBA8_S; b = 4; break;
+        case BC7: o = RGBA8; b = 4; break;
+        case BC7_S: o = RGBA8_S; b = 4; break;
         case BC4_U: o = R8U; b = 1; break;
         case BC4_S: o = R8S; b = 1; break;
         case BC5_U: o = RG8U; b = 2; break;

@@ -9,12 +9,12 @@
 extern int nvn_bc_soft;   // 1 = BC textures are decoded on the CPU (set once the Metal device is known; DM_BC_SOFT=1 forces it, =0 turns it off)
 
 // The uncompressed Metal format a BC Metal format decodes to and its bytes per pixel; 0 when mtl_pf is no BC format
-//   BC1 / BC2 / BC3 / BC7 (and sRGB) → ASTC 4x4 LDR (sRGB), or RGBA8Unorm (_sRGB) with nvn_bc_astc 0; BC4 → R8Unorm / R8Snorm, BC5 → RG8Unorm / RG8Snorm,
+//   BC1 / BC2 / BC3 (and sRGB) → ASTC 4x4 LDR (sRGB), or RGBA8Unorm (_sRGB) with nvn_bc_astc 0; BC7 (and sRGB) → RGBA8Unorm (_sRGB) directly; BC4 → R8Unorm / R8Snorm, BC5 → RG8Unorm / RG8Snorm,
 //   BC6H → RG11B10Float (unsigned, nvn_bc_astc) / RGBA16Float
 uint32_t bc_soft_target(uint32_t mtl_pf, int *bytes_per_pixel);
 // Rows of the decoded level in the staging layout: ceil(h / 4) * 4 pixel rows, or ceil(h / 4) block rows for ASTC 4x4 (nvn_bc_astc)
 size_t bc_soft_rows(uint32_t mtl_pf, uint32_t h);
-extern int nvn_bc_astc;   // 1 (the default) = BC1 / 2 / 3 / 7 become ASTC 4x4 and BC6H unsigned RG11B10F; 0 = RGBA8 / RGBA16F
+extern int nvn_bc_astc;   // 1 (the default) = BC1 / 2 / 3 become ASTC 4x4 and BC6H unsigned RG11B10F; BC7 always uses RGBA8; 0 = RGBA8 / RGBA16F
 
 // Decode a w × h region of BC blocks (src: rows of 4 × 4 blocks, src_pitch bytes from one block row to the next) into dst. dst_pitch is an ASTC block-row pitch for ASTC targets, otherwise a padded pixel-row pitch.
 // dst must hold whole blocks: ceil(w / 4) * 4 pixels per row and ceil(h / 4) * 4 rows. Returns 0, or -1 when mtl_pf is no BC format
