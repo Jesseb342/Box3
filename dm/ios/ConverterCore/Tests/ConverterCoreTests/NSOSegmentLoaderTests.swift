@@ -16,7 +16,7 @@ final class NSOSegmentLoaderTests: XCTestCase {
     func testDecompressesCompressedSegment() throws {
         var file = makeNSO()
         // Segment 0: four stored bytes decode to eight repeated 0x11 bytes.
-        file.replaceSubrange(0x100..<0x104, with: Data([0x1f, 0x11, 0x01, 0x00]))
+        file.replaceSubrange(0x100..<0x104, with: Data([0x13, 0x11, 0x01, 0x00]))
         putLE(UInt32(4), at: 0x60, in: &file)
         putLE(UInt32(8), at: 0x18, in: &file)
         putLE(UInt32(8), at: 0x10, in: &file) // second segment starts after segment 0's stored bytes
