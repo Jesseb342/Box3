@@ -19,6 +19,7 @@ public enum NSORewritePlanningError: Error, Equatable {
     case instructionOutsideCodeRange(UInt64)
     case duplicateInstructionAddress(UInt64)
     case nonContiguousCodeRange(UInt64)
+    case codeRangeOutsideImage(UInt64)
     case unsupportedRewriteSite(UInt64, String)
 }
 
@@ -53,6 +54,7 @@ public struct NSORewriteSite: Equatable {
 public struct NSORewritePlan: Equatable {
     public let sites: [NSORewriteSite]
     public let counts: [NSORewriteSiteKind: Int]
+    public let undecodableAddresses: [UInt64]
 
     public var unsupportedSites: [NSORewriteSite] {
         sites.filter { $0.kind == .x18Unsupported }
@@ -65,7 +67,8 @@ public struct NSORewritePlan: Equatable {
 public enum NSORewritePlanner {
     public static func plan(
         instructions: [DecodedAArch64Instruction],
-        codeRanges: [NSOCodeRange]
+        codeRanges: [NSOCodeRange],
+        allowUndecodableAddresses: Bool = false
     ) throws -> NSORewritePlan {
         let ranges = codeRanges.sorted { $0.start < $1.start }
         if ranges.count > 1 {
@@ -83,11 +86,19 @@ public enum NSORewritePlanner {
         }
 
         var sites: [NSORewriteSite] = []
+        var undecodable: [UInt64] = []
         for range in ranges {
             var address = range.start
             while address < range.end {
                 guard let instruction = byAddress[address] else {
-                    throw NSORewritePlanningError.nonContiguousCodeRange(address)
+                    guard allowUndecodableAddresses else {
+                        throw NSORewritePlanningError.nonContiguousCodeRange(address)
+                    }
+                    undecodable.append(address)
+                    let (next, overflow) = address.addingReportingOverflow(4)
+                    guard !overflow else { throw NSORewritePlanningError.invalidCodeRange }
+                    address = next
+                    continue
                 }
                 let (next, overflow) = address.addingReportingOverflow(4)
                 guard !overflow else { throw NSORewritePlanningError.invalidCodeRange }
