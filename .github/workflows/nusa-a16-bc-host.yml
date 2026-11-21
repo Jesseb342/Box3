@@ -1,0 +1,55 @@
+name: Nusa A16 BC host template
+
+on:
+  push:
+    branches: [nusa-a16-bc-host]
+    paths:
+      - "dm/host/**"
+      - "dm/gfx/nvn/**"
+      - "dm/gfx/tex/**"
+      - "dm/ios/**"
+      - ".github/workflows/nusa-a16-bc-host.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nusa-a16-bc-host-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GAME: 010015100B514000
+
+jobs:
+  build-template:
+    name: Build unsigned Nusa-compatible BC host
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install XcodeGen
+        run: command -v xcodegen || brew install xcodegen
+      - name: Build BC-enabled host template
+        run: |
+          python3 dm/ios/tools/build_nusa_template.py --output "$RUNNER_TEMP/nusa-host-template"
+      - name: Inspect Mach-O output
+        run: |
+          file "$RUNNER_TEMP/nusa-host-template/GameHostTemplate.bin"
+          xcrun llvm-objdump --macho --private-headers "$RUNNER_TEMP/nusa-host-template/GameHostTemplate.bin" > "$RUNNER_TEMP/nusa-host-template/macho-load-commands.txt"
+          xcrun llvm-objdump --macho --section-headers "$RUNNER_TEMP/nusa-host-template/GameHostTemplate.bin" > "$RUNNER_TEMP/nusa-host-template/macho-sections.txt"
+          grep -q "arm64" <(file "$RUNNER_TEMP/nusa-host-template/GameHostTemplate.bin")
+          grep -q "DM_TEST_NO_BC" <(strings "$RUNNER_TEMP/nusa-host-template/GameHostTemplate.bin")
+          grep -q "GameModules.dylib" <(strings "$RUNNER_TEMP/nusa-host-template/GameHostTemplate.bin")
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: Nusa-A16-BC-GameHostTemplate
+          path: |
+            ${{ runner.temp }}/nusa-host-template/GameHostTemplate.bin
+            ${{ runner.temp }}/nusa-host-template/build-info.txt
+            ${{ runner.temp }}/nusa-host-template/macho-load-commands.txt
+            ${{ runner.temp }}/nusa-host-template/macho-sections.txt
+          if-no-files-found: error
+          retention-days: 14
