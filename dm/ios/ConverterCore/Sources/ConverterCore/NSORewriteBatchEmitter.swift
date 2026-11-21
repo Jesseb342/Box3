@@ -23,7 +23,7 @@ public struct NSORewriteBatchResult {
 /// aborts the batch; this prevents silently producing a partially rewritten
 /// executable.
 public enum NSORewriteBatchEmitter {
-    public static func emitPlainX18Sites(
+    public static func emitSupportedSites(
         baseImage: Data,
         plan: NSORewritePlan,
         layout: NSOPatchLayout,
