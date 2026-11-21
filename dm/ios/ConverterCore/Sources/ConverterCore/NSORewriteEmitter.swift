@@ -286,6 +286,8 @@ public enum NSORewriteEmitter {
             words.append(try AArch64Encoder.addImmediate(s, source: s, immediate: Int(target & 0xFFF)))
         }
         words.append(try AArch64Encoder.strX(s, base: t))
+        // Restore both scratch registers before returning to the original code.
+        words.append(try AArch64Encoder.ldp(s, t, base: 31, offset: -16))
         return try finish(
             site: site,
             kind: site.kind,
