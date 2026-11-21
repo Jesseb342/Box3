@@ -153,6 +153,21 @@ Keep the app modular. UI code must orchestrate native conversion services and di
 - Preserve the BC fallback and its regression tests.
 - Keep user keys and game dumps local to the device.
 
+## Current native implementation status
+
+The `ios-on-device-converter` branch now contains these native Swift foundations:
+
+- Bounded PFS0 archive reader and local production-keys parser.
+- Decrypted NCA-header parser and AES-XTS header decryption primitive, with synthetic vectors and an independent hactool/LibHac reference-check executable. Real encrypted-NCA fixture parity remains unverified.
+- Runtime manifest validation and staged-file SHA-256 verification.
+- NSO0 structural parser using the 16-byte build ID consumed by the existing patch profiles.
+- Raw LZ4 block decompression and bounded text/ro/data segment reconstruction.
+- Checked AArch64 instruction encoders for the instruction forms used by the existing rewriter.
+- Near/far NSO patch-area and key-page layout calculation.
+
+These are core-library components, not a finished converter app. The app's file-import UI, NCA content decryption/extraction, complete AArch64 decoder and NSO rewrite, shader translation, runtime assembly, and IPA packaging remain incomplete. CI must pass before these new components are considered build-validated; real fixture parity and iPhone 14 runtime validation are separate acceptance gates.
+
 ## Immediate next engineering task
 
-Continue Gate B with independent NCA crypto layers: run the local reference checker against hactool/LibHac output from a legally owned fixture, resolve any byte mismatch, then add NCA key-area and title-key handling with independent reference tests. Do not proceed to CTR sections until the header and key derivation stages have byte-for-byte reference tests.
+Continue Gate C by implementing the native AArch64 instruction decoder and conservative NSO rewrite planner. First reproduce the existing Python rewriter's instruction classification and relocation behavior on synthetic instruction fixtures, then compare byte-for-byte against legally owned NSO fixtures. Do not emit a rewritten executable until unsupported instruction forms, branch reach, patch-site assertions, and fixup metadata are all handled explicitly. Preserve the existing profile tables as data and do not guess at unknown builds.
+
