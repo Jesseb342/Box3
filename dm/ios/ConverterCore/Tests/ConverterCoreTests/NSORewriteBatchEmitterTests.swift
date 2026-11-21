@@ -45,6 +45,32 @@ final class NSORewriteBatchEmitterTests: XCTestCase {
         XCTAssertEqual(branchWord, try AArch64Encoder.b(from: 0x1000, to: layout.patchOffset))
     }
 
+    func testBatchEmitsX18ADRPRewrite() throws {
+        let decoder = try AArch64Disassembler()
+        let code = Data([0x32, 0x00, 0x00, 0x90]) // adrp x18, #0x5000 at 0x1000
+        let instruction = try XCTUnwrap(decoder.disassemble(code, at: 0x1000).first)
+        let plan = try NSORewritePlanner.plan(
+            instructions: [instruction],
+            codeRanges: [try NSOCodeRange(start: 0x1000, end: 0x1004)]
+        )
+        let layout = try NSOPatchLayout.make(
+            segments: [
+                segment(0, 0, 0x2000),
+                segment(1, 0x2000, 0x1000),
+                segment(2, 0x3000, 0x1000)
+            ],
+            bssSize: 0x2000
+        )
+        var base = Data(repeating: 0, count: Int(layout.fileImageLength))
+        base.replaceSubrange(0x1000..<0x1004, with: code)
+        let result = try NSORewriteBatchEmitter.emitSupportedSites(
+            baseImage: base, plan: plan, layout: layout, decoder: decoder
+        )
+        XCTAssertEqual(result.patchedSiteCount, 1)
+        XCTAssertEqual(result.patchData.count, 36)
+        XCTAssertEqual(result.fixups, [NSORewriteFixup(byteOffset: 8, key: "K18")])
+    }
+
     func testCombinesPlainX18AndTPIDRReadStubs() throws {
         let decoder = try AArch64Disassembler()
         let code = Data([
