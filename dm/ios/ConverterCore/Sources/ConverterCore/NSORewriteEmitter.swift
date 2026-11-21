@@ -4,6 +4,7 @@ public enum NSORewriteEmissionError: Error, Equatable {
     case unsupportedSite(NSORewriteSiteKind)
     case stackPointerWritebackNotSupported
     case insufficientScratchRegisters
+    case siteInstructionMismatch
     case addressOutOfRange
 }
 
@@ -49,22 +50,23 @@ public enum NSORewriteEmitter {
             throw NSORewriteEmissionError.addressOutOfRange
         }
 
-        let used = registers(in: site)
+        var originalBytes = Data()
+        var originalWord = site.instructionWord.littleEndian
+        withUnsafeBytes(of: &originalWord) { originalBytes.append(contentsOf: $0) }
+        guard let original = try decoder.disassemble(originalBytes, at: site.address).first,
+              original.word == site.instructionWord,
+              original.mnemonic == site.mnemonic,
+              original.operandString == site.operands else {
+            throw NSORewriteEmissionError.siteInstructionMismatch
+        }
+
+        let used = registers(in: original)
         let scratch = (0..<16).filter { !used.contains($0) }
         guard scratch.count >= 2 else {
             throw NSORewriteEmissionError.insufficientScratchRegisters
         }
         let s = scratch[0]
         let t = scratch[1]
-        let original = DecodedAArch64Instruction(
-            address: site.address,
-            word: site.instructionWord,
-            mnemonic: site.mnemonic,
-            operandString: site.operands,
-            registersRead: [],
-            registersWritten: [],
-            registersMentioned: Set(used.map { "x\($0)" })
-        )
         let substituted = try AArch64RegisterSubstitution.replaceX18(
             in: original,
             with: s,
@@ -111,12 +113,14 @@ public enum NSORewriteEmitter {
         )
     }
 
-    private static func registers(in site: NSORewriteSite) -> Set<Int> {
-        let expression = try! NSRegularExpression(pattern: #"\b[wx](0|[1-9]|1[0-5]|18)\b"#)
-        let source = site.operands as NSString
-        let range = NSRange(location: 0, length: source.length)
-        return Set(expression.matches(in: site.operands, range: range).compactMap {
-            Int(source.substring(with: $0.range).dropFirst())
+    private static func registers(in instruction: DecodedAArch64Instruction) -> Set<Int> {
+        Set(instruction.allRegisters.compactMap { name in
+            guard let first = name.first, first == "x" || first == "w",
+                  let value = Int(name.dropFirst()),
+                  (0...15).contains(value) || value == 18 else {
+                return nil
+            }
+            return value
         })
     }
 
