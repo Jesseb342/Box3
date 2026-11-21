@@ -278,7 +278,11 @@ public enum NSORewriteEmitter {
               site.instructionWord & 0xFFE0FFFF == 0xCB2063FF else {
             throw NSORewriteEmissionError.siteInstructionMismatch
         }
-        let register = Int(site.argument ?? 32)
+        let encodedRegister = (site.instructionWord >> 16) & 31
+        guard site.argument == encodedRegister else {
+            throw NSORewriteEmissionError.siteInstructionMismatch
+        }
+        let register = Int(encodedRegister)
         guard (0...30).contains(register), register != 18 else {
             throw NSORewriteEmissionError.insufficientScratchRegisters
         }
