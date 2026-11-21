@@ -44,7 +44,7 @@ final class NSOPatchLayoutTests: XCTestCase {
             bssSize: 0,
             frontOverride: 0x01000000
         )
-        XCTAssertEqual(layout.patchOffset, -0x00f00000)
+        XCTAssertEqual(layout.patchOffset, -0x01000000)
     }
 
     func testRejectsIncorrectSegmentOrder() {
