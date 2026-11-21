@@ -44,7 +44,7 @@ final class NSORewritePlannerTests: XCTestCase {
 
     func testDetectsStackPointerDestination() throws {
         let instruction = decoded(
-            0x910003FF, "mov", "sp, x18",
+            0x9100025F, "add", "sp, x18, #0",
             registers: ["sp", "x18"]
         )
         let plan = try NSORewritePlanner.plan(
