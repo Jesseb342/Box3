@@ -208,8 +208,8 @@ public enum NSORewriteEmitter {
         guard delta % 4 == 0 else { throw NSORewriteEmissionError.addressOutOfRange }
         let immediate = Int(delta / 4)
         let rewritten = isCompareBranch
-            ? ((word & 0xFF00001F) | ((UInt32(immediate) & 0x7FFFF) << 5) | UInt32(s))
-            : ((word & 0xFFF8001F) | ((UInt32(immediate) & 0x3FFF) << 5) | UInt32(s))
+            ? ((word & 0xFF00001F) | ((UInt32(truncatingIfNeeded: immediate) & 0x7FFFF) << 5) | UInt32(s))
+            : ((word & 0xFFF8001F) | ((UInt32(truncatingIfNeeded: immediate) & 0x3FFF) << 5) | UInt32(s))
         words.append(rewritten)
         words.append(try AArch64Encoder.ldp(s, t, base: 31, offset: -16))
         let fallthroughBranchPC = try patchPC(patchAddress, wordCount: words.count)
