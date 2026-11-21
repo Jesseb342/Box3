@@ -22,7 +22,7 @@ public enum NSORewritePlanningError: Error, Equatable {
     case unsupportedRewriteSite(UInt64, String)
 }
 
-public enum NSORewriteSiteKind: String, Equatable {
+public enum NSORewriteSiteKind: String, Equatable, Hashable {
     case svc
     case tpidrRead
     case tpidrWrite
@@ -68,8 +68,10 @@ public enum NSORewritePlanner {
         codeRanges: [NSOCodeRange]
     ) throws -> NSORewritePlan {
         let ranges = codeRanges.sorted { $0.start < $1.start }
-        for i in 1..<ranges.count where ranges[i].start < ranges[i - 1].end {
-            throw NSORewritePlanningError.overlappingCodeRanges
+        if ranges.count > 1 {
+            for i in 1..<ranges.count where ranges[i].start < ranges[i - 1].end {
+                throw NSORewritePlanningError.overlappingCodeRanges
+            }
         }
 
         var byAddress: [UInt64: DecodedAArch64Instruction] = [:]
@@ -186,7 +188,7 @@ public enum NSORewritePlanner {
     }
 
     private static func writesStackPointer(mnemonic: String, operands: String) -> Bool {
-        let first = operands.split(separator: ",", maxSplits: 1).first?
+        let first = String(operands.split(separator: ",", maxSplits: 1).first ?? "")
             .trimmingCharacters(in: .whitespaces)
         return first == "sp" || first == "wsp"
     }
