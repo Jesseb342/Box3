@@ -78,20 +78,18 @@ public struct NSOPatchLayout: Equatable {
         let (imageSize, imageOverflow) = keyPage.addingReportingOverflow(pageAlignment)
         guard !imageOverflow else { throw NSOPatchLayoutError.arithmeticOverflow }
 
+        guard textSize < Self.branchReach - Self.branchSafetyMargin else {
+            throw NSOPatchLayoutError.frontPatchAreaTooLarge
+        }
         let maximumFront = Self.branchReach - Self.branchSafetyMargin - textSize
         let isBigText = textSize + Self.defaultFront > Self.branchReach - Self.branchSafetyMargin
         let front: UInt64
-        if let frontOverride {
-            front = frontOverride
-        } else if isBigText {
-            guard textSize < Self.branchReach - Self.branchSafetyMargin else {
-                throw NSOPatchLayoutError.frontPatchAreaTooLarge
-            }
-            front = maximumFront & ~(patchAlignment - 1)
+        if isBigText {
+            front = frontOverride ?? (maximumFront & ~(Self.patchAlignment - 1))
         } else {
             front = Self.defaultFront
         }
-        guard front > 0, front <= UInt64(Int64.max) else {
+        guard front > 0, front <= maximumFront, front <= UInt64(Int64.max) else {
             throw NSOPatchLayoutError.frontPatchAreaTooLarge
         }
 
