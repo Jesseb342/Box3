@@ -238,6 +238,63 @@ public enum NSORewriteEmitter {
                               fixups: [fixup], siteBranchWord: siteBranch, gate: nil)
     }
 
+    /// Rewrites ADR/ADRP x18 destinations by materializing the original absolute
+    /// address in a scratch register and writing it to the guest x18 slot.
+    public static func emitX18PCRelative(
+        _ site: NSORewriteSite,
+        patchAddress: Int64,
+        keyPageOffset: Int64,
+        decoder: AArch64Disassembler
+    ) throws -> NSORewriteBlock {
+        guard site.kind == .x18PCRelative,
+              site.address <= UInt64(Int64.max) else {
+            throw NSORewriteEmissionError.unsupportedSite(site.kind)
+        }
+        let original = try decodeOriginal(site, decoder: decoder)
+        let word = site.instructionWord
+        let isADR = word & 0x9F000000 == 0x10000000
+        let isADRP = word & 0x9F000000 == 0x90000000
+        guard (isADR || isADRP), (word & 31) == 18,
+              original.mnemonic == (isADR ? "adr" : "adrp") else {
+            throw NSORewriteEmissionError.siteInstructionMismatch
+        }
+
+        let immediate = (((word >> 5) & 0x7FFFF) << 2) | ((word >> 29) & 0x3)
+        let signedImmediate = Int64(Int32(bitPattern: immediate << 11) >> 11)
+        let base = isADRP ? (Int64(site.address) & ~Int64(0xFFF)) : Int64(site.address)
+        let displacement = isADRP ? signedImmediate * 0x1000 : signedImmediate
+        let (target, overflow) = base.addingReportingOverflow(displacement)
+        guard !overflow, target >= 0 else {
+            throw NSORewriteEmissionError.addressOutOfRange
+        }
+
+        // x18 is the only guest register referenced by ADR/ADRP, so x0/x1
+        // are safe scratch registers and do not need a dynamic liveness guess.
+        let s = 0, t = 1
+        var words = [
+            try AArch64Encoder.stp(s, t, base: 31, offset: -16),
+            try AArch64Encoder.mrsTPIDRRO(t)
+        ]
+        let keyPC = try patchPC(patchAddress, wordCount: words.count)
+        let fixup = NSORewriteFixup(byteOffset: words.count * 4, key: "K18")
+        words.append(try AArch64Encoder.adrp(s, pc: keyPC, target: keyPageOffset))
+        words.append(try AArch64Encoder.ldrX(s, base: s))
+        words.append(try AArch64Encoder.addRegister(t, source: t, operand: s))
+        let targetPC = try patchPC(patchAddress, wordCount: words.count)
+        words.append(try AArch64Encoder.adrp(s, pc: targetPC, target: target))
+        if isADR {
+            words.append(try AArch64Encoder.addImmediate(s, source: s, immediate: Int(target & 0xFFF)))
+        }
+        words.append(try AArch64Encoder.strX(s, base: t))
+        return try finish(
+            site: site,
+            kind: site.kind,
+            words: words,
+            fixups: [fixup],
+            patchAddress: patchAddress
+        )
+    }
+
     public static func emitSystemRegisterRead(
         _ site: NSORewriteSite,
         patchAddress: Int64,
