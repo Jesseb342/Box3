@@ -191,6 +191,89 @@ final class NSORewriteEmitterTests: XCTestCase {
         XCTAssertEqual(decoded[7].mnemonic, "ldp")
     }
 
+
+    private func pcRelativeWord(isADRP: Bool, immediate: Int32, destination: UInt32 = 18) -> UInt32 {
+        let encoded = UInt32(bitPattern: immediate) & 0x1FFFFF
+        return (isADRP ? 0x90000000 : 0x10000000) |
+            ((encoded & 0x3) << 29) |
+            (((encoded >> 2) & 0x7FFFF) << 5) |
+            destination
+    }
+
+    private func littleEndianWord(_ word: UInt32) -> Data {
+        Data((0..<4).map { UInt8(truncatingIfNeeded: word >> ($0 * 8)) })
+    }
+
+    func testADRImmediateSignedBoundariesPreserveExactTargets() throws {
+        let decoder = try AArch64Disassembler()
+        let siteAddress: UInt64 = 0x02000000
+        let vectors: [(Int32, UInt64)] = [
+            (-1_048_576, siteAddress - 1_048_576),
+            (1_048_575, siteAddress + 1_048_575)
+        ]
+
+        for (immediate, expectedTarget) in vectors {
+            let word = pcRelativeWord(isADRP: false, immediate: immediate)
+            let instruction = try XCTUnwrap(decoder.disassemble(
+                littleEndianWord(word), at: siteAddress
+            ).first)
+            let plan = try NSORewritePlanner.plan(
+                instructions: [instruction],
+                codeRanges: [try NSOCodeRange(start: siteAddress, end: siteAddress + 4)]
+            )
+            let site = try XCTUnwrap(plan.sites.first)
+            let patchAddress = Int64(siteAddress + 0x100)
+            let block = try NSORewriteEmitter.emitX18PCRelative(
+                site, patchAddress: patchAddress,
+                keyPageOffset: Int64(siteAddress + 0x2000), decoder: decoder
+            )
+            let decoded = try decoder.disassemble(block.data, at: UInt64(patchAddress))
+            XCTAssertEqual(decoded[5].mnemonic, "adrp")
+            XCTAssertEqual(decoded[5].operandString,
+                           String(format: "x0, 0x%llx", expectedTarget & ~UInt64(0xFFF)))
+            XCTAssertEqual(decoded[6].operandString,
+                           String(format: "x0, x0, #%llu", expectedTarget & 0xFFF))
+            XCTAssertEqual(decoded.last?.mnemonic, "b")
+            XCTAssertEqual(decoded.last?.operandString,
+                           String(format: "0x%llx", siteAddress + 4))
+        }
+    }
+
+    func testADRPImmediateSignedPageBoundariesPreserveExactTargets() throws {
+        let decoder = try AArch64Disassembler()
+        let siteAddress: UInt64 = 0x1_0000_0000
+        let vectors: [(Int32, UInt64)] = [
+            (-1_048_576, 0),
+            (1_048_575, siteAddress + 1_048_575 * 0x1000)
+        ]
+
+        for (immediate, expectedTarget) in vectors {
+            let word = pcRelativeWord(isADRP: true, immediate: immediate)
+            let instruction = try XCTUnwrap(decoder.disassemble(
+                littleEndianWord(word), at: siteAddress
+            ).first)
+            let plan = try NSORewritePlanner.plan(
+                instructions: [instruction],
+                codeRanges: [try NSOCodeRange(start: siteAddress, end: siteAddress + 4)]
+            )
+            let site = try XCTUnwrap(plan.sites.first)
+            let patchAddress = Int64(siteAddress + 0x100)
+            let block = try NSORewriteEmitter.emitX18PCRelative(
+                site, patchAddress: patchAddress,
+                keyPageOffset: Int64(siteAddress + 0x2000), decoder: decoder
+            )
+            let decoded = try decoder.disassemble(block.data, at: UInt64(patchAddress))
+            XCTAssertEqual(decoded[5].mnemonic, "adrp")
+            XCTAssertEqual(decoded[5].operandString,
+                           String(format: "x0, 0x%llx", expectedTarget))
+            XCTAssertEqual(decoded[6].mnemonic, "str")
+            XCTAssertEqual(decoded[7].mnemonic, "ldp")
+            XCTAssertEqual(decoded.last?.mnemonic, "b")
+            XCTAssertEqual(decoded.last?.operandString,
+                           String(format: "0x%llx", siteAddress + 4))
+        }
+    }
+
     func testRejectsStackPointerDestination() throws {
         let site = NSORewriteSite(
             address: 0x1000,
