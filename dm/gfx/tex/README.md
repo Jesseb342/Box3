@@ -1,0 +1,62 @@
+# dm/gfx/tex — texture format mapping, block-linear deswizzling, BC decompression
+
+The part of the graphics layer that deals with texture data, called by the replay layer `../nvn/nvn_mtl.m`. It does three things:
+
+1. converts NVN texture format numbers to Metal pixel formats;
+2. unpacks the Switch's "block-linear" layout into an ordinary row-by-row layout;
+3. decompresses BC textures on GPUs that do not support BC compressed textures.
+
+Block linear is how the Tegra X1 GPU stores textures: the data is not one row after another, but interleaved in small blocks of 64 bytes × 8 rows (GOBs), and several GOBs are then stacked into larger blocks according to a "block height" and a "block depth". The game's packaged texture files are in exactly this layout, and it must be undone before uploading to Metal.
+
+## Files
+
+| File | Contents |
+|---|---|
+| `nvn_fmt_mtl.h`, `nvn_fmt_mtl.c` | `nvn_fmt_to_mtl()`: NVN format (0x01–0x9C) → Metal pixel format + component remapping. Returns 1 for an exact match, 2 for a substitute (precision, bit order or interpretation differs and a conversion is needed), 0 when Metal has no corresponding format. How each format is handled is written in the comments inside the table. Pure C, no dependency on Metal headers |
+| `nvn_deswizzle.h`, `nvn_deswizzle.c` | `nvn_deswizzle()`: deswizzles one level and one layer from block linear to linear; `nvn_swizzle()`: the reverse, used for round trips in unit tests; `nvn_bl_offset()`: the block-linear address of a single point. Pure C |
+| `nvn_deswizzle_gpu.h`, `nvn_deswizzle_gpu.m` | A Metal compute shader version of the same deswizzling algorithm, used by the replay layer when uploading packaged textures; when initialization fails or an unsupported format is encountered, the replay layer falls back to the CPU version |
+| `nvn_bcdec.h`, `nvn_bcdec.c` | `nvn_bc_unpacked()` / `nvn_bc_decode()`: decompress BC textures on the CPU into uncompressed formats; decoding uses `dm/third_party/bcdec` |
+| `tests/` | Unit tests |
+
+The offsets of each level and layer within the storage, and the block height and block depth actually used by each level, are all taken from `../nvn/nvn_tex.c` (`nvn_tex_layout`, `nvn_tex_level_offset`, `nvn_tex_level_tiles`); this directory only does addressing and moving within a level. Packaged parameters override the automatic block dimensions: [Packaged texture block dimensions and linear storage rows](../../../docs/reference/nvn-objects.md#packaged-texture-block-dimensions-and-linear-storage-rows).
+
+## Devices without BC support
+
+Some older Apple GPUs do not support BC compressed textures (determined by `supportsBCTextureCompression` of `MTLDevice`). On these devices:
+
+- **BC1, BC2 and BC3 are stored as ASTC 4x4** (8 bits per texel, `MTLPixelFormatASTC_4x4_LDR` / `_sRGB`), by transcoding every 4x4 BC block into one 16-byte ASTC block at upload (`nvn_bc2astc.c` on the CPU, the kernel `bca` on the GPU; both are the one algorithm in `bc2astc_body.inc`, and the GPU output is byte-identical to the C reference). That is a quarter of RGBA8 (Metroid Dread's textures: 2.5 GB as BC, 8.3 GB decompressed to RGBA8, 3.4 GB as ASTC). A compute kernel cannot write an ASTC texture, so `up_flush` runs: zero fills, barrier, the `bcd` / `bca` dispatches, barrier, then buffer→texture copies. The CPU paths (sparse pools, `copy_b2t`, no GPU deswizzle) call `nvn_bc2astc`. A new texture is zero-filled with a constant (0,0,0,0) ASTC block (an all-zero block is invalid).
+- **BC4 / BC5 keep the existing GPU decode; non-3D BC6H / BC7 use the `bc_soft.c` decoder adapted from [NXNativeWindows](https://github.com/zenvyzenshiro/NXNativeWindows).** BC7 is stored as ASTC 4x4 (or RGBA8 with `DM_BC_ASTC=0`); unsigned BC6H is packed as R11G11B10F (4 bytes per pixel), while signed BC6H remains RGBA16F (8 bytes per pixel). 3D textures retain the existing RGBA fallback. This avoids expanding BC7 to RGBA8 and halves unsigned BC6H storage compared with RGBA16F;
+- **The ASTC layouts** (a 128-bit block: 11 mode bits, 2 partition bits, 4 CEM bits, endpoints, [2 plane-select bits], weights stored from the top): *L0* a void-extent block for any block whose 16 texels are equal; *L1a / L1b* one plane, 2-bit weights, 8-bit endpoints (CEM 8 / 12) for opaque BC1 and for BC2 / BC3 with uniform alpha (nearly lossless, ≤ 2 levels); *L2* BC1 three-colour (punch-through) blocks, CEM 12, two planes, trit weights 0 / 32 / 64, 7-bit endpoints, alpha 0 or 255; *L3* BC2 / BC3 with varying alpha, CEM 12, two planes (colour and alpha) with 2-bit weights, endpoints in 48 levels (128 of 128 bits). L3 is lossy by construction (four alpha levels per block). Where the decoder would blue-contract (the sum of the second endpoint below the first), all endpoints are swapped and the weights of both planes inverted. Measured on Metroid Dread's 88 M BC3 blocks: alpha PSNR 39.7 dB overall (median per texture 42.5 dB, p5 33.7, p1 31.8), colour 50.1 dB; BC1 colour 57.9 dB (`tests/bench_bc2astc_dread.c`, `tests/t_bc2astc.c`);
+- `DM_NO_BC_ASTC=all` (default) | `bc1` | `0` chooses what is stored as ASTC (`0` decompresses everything to RGBA8, for A/B comparisons). A game profile may list BC3 textures that stay RGBA8 because their alpha would lose too much (`dm/games/<id>/bc3_keep_rgba8.tsv`, optional, written by the benchmark with an alpha PSNR threshold; keyed by `nvn_texkey.h` of the packaged storage, looked up once per texture; `DM_NO_BC_ASTC_KEEP=0` ignores it, `DM_NO_BC_ASTC_KEEP_TABLE=path` names another table, `DM_NO_BC_ASTC_KEYLOG=1` logs every lookup);
+- a BC texture is never a render target and its raw blocks are not sampled through an uncompressed view, with or without BC (Metal has no such views; Breath of the Wild encodes one 32×32 BC4 texture on the GPU, GitHub issue #4). The CPU and `copy_t2b` readbacks of a GPU-written BC texture are not done (red lines 51 and 52);
+- a BC texture is never a render target and its raw blocks are not sampled through an uncompressed view, with or without BC (Metal has no such views; Breath of the Wild encodes one 32×32 BC4 texture on the GPU, GitHub issue #4).
+
+The environment variable `DM_TEST_NO_BC=1` forces the no-BC path on any machine. `DM_BC_SOFT=0|1` overrides hardware detection; `DM_BC_ASTC=0` disables BC7→ASTC and compact unsigned-BC6H output (using RGBA8 / RGBA16F instead). `DM_NO_BC_ASTC` continues to control the existing BC1–3 ASTC path.
+
+## Tests
+
+```sh
+make -C dm/gfx/tex/tests run       # t_fmt_mtl, t_tex, t_bc_soft and t_bcdec
+make -C dm/gfx/tex/tests astc ASTCENC=/path/to/astcenc  # BC1–3 and BC7 ASTC quality tests
+```
+
+- **`t_fmt_mtl`**: takes the mapping for every NVN format in 0x01–0x9C and, for every one whose mapping is not 0, actually creates a texture on the local Metal device; all of them must be created successfully. It also checks that every NVN format with sRGB in its name lands on a Metal sRGB format. No game files needed.
+- **`t_bc_soft`**: BC6H/BC7 decoder targets, padded output rows, BC7 ASTC block output and BC6H compact packing.
+- **`t_bcdec`**: NVN format-to-Metal mapping and the BC6H/BC7 compact upload decoder.
+- **`t_bc2astc`**: BC1–3 regression tests plus BC7→ASTC decoding through Arm's `astcenc`, exercising all eight BC7 modes and reporting PSNR.
+- **`t_tex`**: the deswizzling tests, in several groups:
+
+  | Group | Criterion |
+  |---|---|
+  | A round trip | Writes random data into each level and layer and reads it back out; must be byte-for-byte equal. Covers 2D, 2D array and 3D, several bytes-per-block values and non-power-of-two sizes |
+  | B address formula | The result of `nvn_bl_offset()` equals the address computed by hand from the public layout rules |
+  | D differential copies | Both copy directions match a byte-address oracle for 1,029 deterministic layouts, including padded pitches, byte tails, sparse mip tails, packaged block dimensions, arrays and cubes; untouched storage and row padding are compared too |
+  | E hand-made 3D | Places markers at hand-computed addresses, checks where they land after deswizzling, and checks block height, block depth and storage size |
+
+  The A round trip can only prove "one-to-one and within bounds"; it cannot prove that the layout formula is right. What backs it up is the hand-computed addresses of groups B and E, and the games that render right.
+
+## Limitations
+
+- `nvn_deswizzle()` does not support multisampled textures, textures with the LINEAR flag (which are linear to begin with) or the BUFFER target; it returns -1 when it encounters them.
+- Cubes and cube arrays are handled as layered textures.
+- The component bit order of the 16-bit packed formats (565 / 5551 / 4444) is mapped according to the format names and has not been checked with real data; they are marked as "substitute" in the format table.

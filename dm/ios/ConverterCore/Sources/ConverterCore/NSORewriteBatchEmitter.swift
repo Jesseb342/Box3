@@ -1,0 +1,196 @@
+import Foundation
+
+public enum NSORewriteBatchError: Error, Equatable {
+    case baseImageSizeMismatch(expected: UInt64, actual: Int)
+    case unsupportedSite(NSORewriteSiteKind, UInt64)
+    case containsUndecodableInstructions([UInt64])
+    case siteOutsideImage(UInt64)
+    case originalInstructionMismatch(UInt64, expected: UInt32, actual: UInt32)
+    case patchAreaDoesNotFit(required: UInt64, available: UInt64)
+    case invalidPatchOffset
+}
+
+public struct NSORewriteBatchResult {
+    public let fileData: Data
+    public let patchData: Data
+    public let fixups: [NSORewriteFixup]
+    public let gates: [NSORewriteGate]
+    public let patchedSiteCount: Int
+}
+
+/// Builds a complete file-layout byte stream for modules whose rewrite plan
+/// contains only implemented site classes. Any unimplemented or undecodable
+/// site aborts the batch, preventing a partially rewritten executable.
+public enum NSORewriteBatchEmitter {
+    public static func emitSupportedSites(
+        baseImage: Data,
+        plan: NSORewritePlan,
+        layout: NSOPatchLayout,
+        decoder: AArch64Disassembler
+    ) throws -> NSORewriteBatchResult {
+        guard UInt64(baseImage.count) == layout.fileImageLength else {
+            throw NSORewriteBatchError.baseImageSizeMismatch(
+                expected: layout.fileImageLength,
+                actual: baseImage.count
+            )
+        }
+        guard plan.undecodableAddresses.isEmpty else {
+            throw NSORewriteBatchError.containsUndecodableInstructions(plan.undecodableAddresses)
+        }
+        let supported: Set<NSORewriteSiteKind> = [
+            .x18Plain, .x18StackPointer, .x18Conditional, .x18PCRelative, .tpidrRead, .tpidrroRead, .tpidrWrite,
+            .svc, .counterPhysicalRead, .counterVirtualRead,
+            .stackAlignment, .cacheTypeRead
+        ]
+        for site in plan.sites where !supported.contains(site.kind) {
+            throw NSORewriteBatchError.unsupportedSite(site.kind, site.address)
+        }
+
+        guard layout.keyPageOffset <= UInt64(Int64.max) else {
+            throw NSORewriteBatchError.invalidPatchOffset
+        }
+        var image = baseImage
+        var patch = Data()
+        var fixups: [NSORewriteFixup] = []
+        var gates: [NSORewriteGate] = []
+        for site in plan.sites.sorted(by: { $0.address < $1.address }) {
+            guard site.address <= UInt64(image.count),
+                  UInt64(image.count) - site.address >= 4 else {
+                throw NSORewriteBatchError.siteOutsideImage(site.address)
+            }
+            let offset = Int(site.address)
+            let actual = readUInt32LE(image, at: offset)
+            guard actual == site.instructionWord else {
+                throw NSORewriteBatchError.originalInstructionMismatch(
+                    site.address,
+                    expected: site.instructionWord,
+                    actual: actual
+                )
+            }
+
+            if site.kind == .cacheTypeRead {
+                let register = site.argument ?? 32
+                guard register == (site.instructionWord & 31),
+                      register != 18, register <= 31 else {
+                    throw NSORewriteBatchError.unsupportedSite(site.kind, site.address)
+                }
+                writeUInt32LE(0xD2A00080 | register, to: &image, at: offset)
+                continue
+            }
+
+            let patchAddress = try currentPatchAddress(
+                base: layout.patchOffset,
+                byteCount: patch.count
+            )
+            let block: NSORewriteBlock
+            switch site.kind {
+            case .x18Plain:
+                block = try NSORewriteEmitter.emitPlainX18(
+                    site,
+                    patchAddress: patchAddress,
+                    keyPageOffset: Int64(layout.keyPageOffset),
+                    decoder: decoder
+                )
+            case .x18StackPointer:
+                block = try NSORewriteEmitter.emitX18StackPointer(
+                    site, patchAddress: patchAddress,
+                    keyPageOffset: Int64(layout.keyPageOffset), decoder: decoder
+                )
+            case .x18Conditional:
+                block = try NSORewriteEmitter.emitX18Conditional(
+                    site, patchAddress: patchAddress,
+                    keyPageOffset: Int64(layout.keyPageOffset), decoder: decoder
+                )
+            case .x18PCRelative:
+                block = try NSORewriteEmitter.emitX18PCRelative(
+                    site, patchAddress: patchAddress,
+                    keyPageOffset: Int64(layout.keyPageOffset), decoder: decoder
+                )
+            case .tpidrRead, .tpidrroRead:
+                block = try NSORewriteEmitter.emitSystemRegisterRead(
+                    site,
+                    patchAddress: patchAddress,
+                    keyPageOffset: Int64(layout.keyPageOffset)
+                )
+            case .tpidrWrite:
+                block = try NSORewriteEmitter.emitSystemRegisterWrite(
+                    site,
+                    patchAddress: patchAddress,
+                    keyPageOffset: Int64(layout.keyPageOffset)
+                )
+            case .svc, .counterPhysicalRead, .counterVirtualRead:
+                block = try NSORewriteEmitter.emitHostGate(
+                    site,
+                    patchAddress: patchAddress,
+                    keyPageOffset: Int64(layout.keyPageOffset)
+                )
+            case .stackAlignment:
+                block = try NSORewriteEmitter.emitStackAlignment(
+                    site,
+                    patchAddress: patchAddress
+                )
+            default:
+                throw NSORewriteBatchError.unsupportedSite(site.kind, site.address)
+            }
+            for fixup in block.fixups {
+                fixups.append(NSORewriteFixup(
+                    byteOffset: patch.count + fixup.byteOffset,
+                    key: fixup.key
+                ))
+            }
+            patch.append(block.data)
+            if let gate = block.gate { gates.append(gate) }
+            writeUInt32LE(block.siteBranchWord, to: &image, at: offset)
+        }
+
+        var output = image
+        if layout.isFar {
+            let front = UInt64(-layout.patchOffset)
+            let available = front >= 0x4000 ? front - 0x4000 : 0
+            guard UInt64(patch.count) <= available else {
+                throw NSORewriteBatchError.patchAreaDoesNotFit(
+                    required: UInt64(patch.count),
+                    available: available
+                )
+            }
+        } else {
+            guard layout.patchOffset >= 0 else {
+                throw NSORewriteBatchError.invalidPatchOffset
+            }
+            let target = UInt64(layout.patchOffset)
+            guard target >= UInt64(output.count) else {
+                throw NSORewriteBatchError.invalidPatchOffset
+            }
+            output.append(Data(repeating: 0, count: Int(target - UInt64(output.count))))
+        }
+        output.append(patch)
+
+        return NSORewriteBatchResult(
+            fileData: output,
+            patchData: patch,
+            fixups: fixups,
+            gates: gates,
+            patchedSiteCount: plan.sites.count
+        )
+    }
+
+    private static func currentPatchAddress(base: Int64, byteCount: Int) throws -> Int64 {
+        let (address, overflow) = base.addingReportingOverflow(Int64(byteCount))
+        guard !overflow else { throw NSORewriteBatchError.invalidPatchOffset }
+        return address
+    }
+
+    private static func readUInt32LE(_ data: Data, at offset: Int) -> UInt32 {
+        UInt32(data[offset]) |
+            (UInt32(data[offset + 1]) << 8) |
+            (UInt32(data[offset + 2]) << 16) |
+            (UInt32(data[offset + 3]) << 24)
+    }
+
+    private static func writeUInt32LE(_ word: UInt32, to data: inout Data, at offset: Int) {
+        data[offset] = UInt8(truncatingIfNeeded: word)
+        data[offset + 1] = UInt8(truncatingIfNeeded: word >> 8)
+        data[offset + 2] = UInt8(truncatingIfNeeded: word >> 16)
+        data[offset + 3] = UInt8(truncatingIfNeeded: word >> 24)
+    }
+}
