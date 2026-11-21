@@ -37,7 +37,8 @@ public enum AArch64Encoder {
     }
 
     public static func beq(from: Int64, to: Int64) throws -> UInt32 {
-        let delta = to - from
+        let (delta, overflow) = to.subtractingReportingOverflow(from)
+        guard !overflow else { throw AArch64EncodingError.branchOutOfRange }
         guard delta % 4 == 0 else { throw AArch64EncodingError.unalignedBranch }
         guard let immediate = signed(Int(delta / 4), bits: 19) else {
             throw AArch64EncodingError.branchOutOfRange
@@ -98,7 +99,7 @@ public enum AArch64Encoder {
             throw AArch64EncodingError.invalidImmediate
         }
         return opcode | (UInt32(immediate) << 10) |
-            (try reg(base) << 5) | reg(target)
+            (try reg(base) << 5) | (try reg(target))
     }
 
     public static func mrsTPIDRRO(_ target: Int) throws -> UInt32 {
@@ -132,7 +133,7 @@ public enum AArch64Encoder {
 
     public static func addRegister(_ destination: Int, source: Int, operand: Int) throws -> UInt32 {
         0x8B000000 | (try reg(operand) << 16) |
-            (try reg(source) << 5) | reg(destination)
+            (try reg(source) << 5) | (try reg(destination))
     }
 
     public static func branchRegister(_ source: Int) throws -> UInt32 {
