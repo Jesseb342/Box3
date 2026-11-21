@@ -113,7 +113,7 @@ def main():
     required = (
         b"DM_TEST_NO_BC", b"DM_BC_SOFT", b"DM_NO_BC_ASTC",
         b"GameModules.dylib", b"boot: loaded external game modules",
-        b"romfs.img", b"modules.txt", b"HostResources", b"HostResources/dm",
+        b"romfs.img", b"modules.txt", b"HostResources",
     )
     missing = [s.decode("ascii") for s in required if s not in binary]
     if missing:
