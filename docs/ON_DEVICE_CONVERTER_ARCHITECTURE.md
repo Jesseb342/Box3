@@ -163,14 +163,15 @@ The `ios-on-device-converter` branch now contains these native Swift foundations
 - NSO0 structural parser using the 16-byte build ID consumed by the existing patch profiles.
 - Raw LZ4 block decompression and bounded text/ro/data segment reconstruction.
 - Checked AArch64 instruction encoders for the instruction forms used by the existing rewriter.
-- A strict Capstone-backed AArch64 disassembler adapter with full register/operand detail and rejection of partial instruction streams.
+- A strict Capstone-backed AArch64 disassembler adapter with full register/operand detail, plus a recovery mode that records undecodable trap words and continues scanning.
 - A conservative rewrite-site planner for SVC, thread-pointer registers, counter/cache registers, stack alignment, and x18 instruction categories.
-- A Capstone-verified x18 register-field substitution routine and the first executable patch emitter: the ordinary non-stack-adjusting x18 site stub, including its K18 key-page fixup. The emitter validates its output by decoding the substituted instruction and has explicit guards against stack-pointer writeback.
+- A Capstone-verified x18 register-field substitution routine and the first executable patch emitter: the ordinary non-stack-adjusting x18 site stub, including its K18 key-page fixup.
+- A strict batch assembler for modules whose rewrite plan contains only that supported x18 site class. It checks original instruction bytes, patches each site with a range-checked branch to its stub, appends the patch area using the near/far file layout, and emits adjusted fixup offsets. It aborts on any unimplemented site kind rather than producing a partial executable.
 - Near/far NSO patch-area and key-page layout calculation.
 
 These are core-library components, not a finished converter app. The app's file-import UI, NCA content decryption/extraction, complete AArch64 decoder and NSO rewrite, shader translation, runtime assembly, and IPA packaging remain incomplete. CI must pass before these new components are considered build-validated; real fixture parity and iPhone 14 runtime validation are separate acceptance gates.
 
 ## Immediate next engineering task
 
-Continue Gate C by porting system-register and host-gate stubs, then the stack-adjusting and conditional x18 forms. Complex x18 jump tables, exclusive windows, spin waits, registered cuts, and observation gates must remain explicitly unsupported until their original context analysis and relocation behavior are ported. Do not emit a rewritten executable until unsupported instruction forms, branch reach, patch-site assertions, and fixup metadata are all handled explicitly. Preserve the existing profile tables as data and do not guess at unknown builds.
+Continue Gate C by porting system-register and host-gate stubs, then stack-adjusting and conditional x18 forms. The restricted batch output is a validation scaffold, not yet a usable general-game converter: it must be compared with the desktop rewriter on real fixtures and must not be used for modules with unhandled site types. Complex x18 jump tables, exclusive windows, spin waits, registered cuts, and observation gates must remain explicitly unsupported until their original context analysis and relocation behavior are ported. Do not emit a rewritten executable until unsupported instruction forms, branch reach, patch-site assertions, and fixup metadata are all handled explicitly. Preserve the existing profile tables as data and do not guess at unknown builds.
 
