@@ -9,7 +9,7 @@ let package = Package(
         .executable(name: "nca-header-reference-check", targets: ["NCAHeaderReferenceCheck"])
     ],
     dependencies: [
-        .package(url: "https://github.com/Lakr233/libcapstone-spm.git", from: "0.1.3")
+        .package(url: "https://github.com/Lakr233/libcapstone-spm.git", exact: "0.1.3")
     ],
     targets: [
         .target(
