@@ -38,7 +38,7 @@ public enum NSORewriteBatchEmitter {
             throw NSORewriteBatchError.containsUndecodableInstructions(plan.undecodableAddresses)
         }
         let supported: Set<NSORewriteSiteKind> = [
-            .x18Plain, .x18StackPointer, .x18Conditional, .tpidrRead, .tpidrroRead, .tpidrWrite,
+            .x18Plain, .x18StackPointer, .x18Conditional, .x18PCRelative, .tpidrRead, .tpidrroRead, .tpidrWrite,
             .svc, .counterPhysicalRead, .counterVirtualRead,
             .stackAlignment, .cacheTypeRead
         ]
@@ -98,6 +98,11 @@ public enum NSORewriteBatchEmitter {
                 )
             case .x18Conditional:
                 block = try NSORewriteEmitter.emitX18Conditional(
+                    site, patchAddress: patchAddress,
+                    keyPageOffset: Int64(layout.keyPageOffset), decoder: decoder
+                )
+            case .x18PCRelative:
+                block = try NSORewriteEmitter.emitX18PCRelative(
                     site, patchAddress: patchAddress,
                     keyPageOffset: Int64(layout.keyPageOffset), decoder: decoder
                 )
