@@ -116,7 +116,7 @@ public enum NSORewritePlanner {
         sites.sort { $0.address < $1.address }
         var counts: [NSORewriteSiteKind: Int] = [:]
         for site in sites { counts[site.kind, default: 0] += 1 }
-        return NSORewritePlan(sites: sites, counts: counts)
+        return NSORewritePlan(sites: sites, counts: counts, undecodableAddresses: undecodable)
     }
 
     private static func classify(_ instruction: DecodedAArch64Instruction) -> NSORewriteSite? {
