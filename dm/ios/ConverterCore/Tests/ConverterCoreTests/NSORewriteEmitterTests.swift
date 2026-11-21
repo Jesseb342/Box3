@@ -232,7 +232,7 @@ final class NSORewriteEmitterTests: XCTestCase {
             XCTAssertEqual(decoded[5].operandString,
                            String(format: "x0, 0x%llx", expectedTarget & ~UInt64(0xFFF)))
             XCTAssertEqual(decoded[6].operandString,
-                           String(format: "x0, x0, #0x%llx", expectedTarget & 0xFFF))
+                           (expectedTarget & 0xFFF) == 0 ? "x0, x0, #0" : String(format: "x0, x0, #0x%llx", expectedTarget & 0xFFF))
             XCTAssertEqual(decoded.last?.mnemonic, "b")
             XCTAssertEqual(decoded.last?.operandString,
                            String(format: "0x%llx", siteAddress + 4))
