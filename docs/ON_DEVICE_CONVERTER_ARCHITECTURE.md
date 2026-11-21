@@ -90,7 +90,6 @@ Keep the app modular. UI code must orchestrate native conversion services and di
    - Extract and classify shader containers from the game's assets.
    - Port or compile the required Ryujinx translation stages so Maxwell/NVN shaders can be translated on-device.
    - Convert SPIR-V to MSL with SPIRV-Cross or an equivalent in-process library.
-   - Convert SPIR-V to MSL with SPIRV-Cross or an equivalent in-process library.
    - Cache translated MSL by source/profile/translator version. Apple documents `MTLDevice.makeLibrary(source:options:)` as compiling MSL source at runtime; this gives us an on-device route without `xcrun metal`.
    - Adapt the Box3 runtime to load/compile MSL source strings instead of requiring the desktop pipeline's prebuilt `.metallib` files. Use Metal binary archives for pipeline-state caching where supported.
    - Preserve separate Vulkan/OpenGL paths where a game uses them; do not assume every game is NVN.
