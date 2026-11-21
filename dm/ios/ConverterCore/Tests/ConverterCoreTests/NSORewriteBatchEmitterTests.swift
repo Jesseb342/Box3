@@ -250,6 +250,81 @@ final class NSORewriteBatchEmitterTests: XCTestCase {
         }
     }
 
+    func testBatchEmitsADREwriteAndPreservesAbsoluteAddressSemantics() throws {
+        let decoder = try AArch64Disassembler()
+        // Independently assembled ADR x18, #0x1004 at 0x1FFC => 0x3000.
+        let siteAddress: UInt64 = 0x1FFC
+        let code = Data([0x92, 0x00, 0x00, 0x10])
+        let instruction = try XCTUnwrap(decoder.disassemble(code, at: siteAddress).first)
+        let plan = try NSORewritePlanner.plan(
+            instructions: [instruction],
+            codeRanges: [try NSOCodeRange(start: siteAddress, end: siteAddress + 4)]
+        )
+        let layout = try NSOPatchLayout.make(
+            segments: [
+                segment(0, 0, 0x2000),
+                segment(1, 0x2000, 0x1000),
+                segment(2, 0x3000, 0x1000)
+            ],
+            bssSize: 0x2000
+        )
+        var base = Data(repeating: 0, count: Int(layout.fileImageLength))
+        base.replaceSubrange(Int(siteAddress)..<Int(siteAddress + 4), with: code)
+
+        let result = try NSORewriteBatchEmitter.emitSupportedSites(
+            baseImage: base, plan: plan, layout: layout, decoder: decoder
+        )
+        XCTAssertEqual(result.patchedSiteCount, 1)
+        XCTAssertEqual(result.fixups, [NSORewriteFixup(byteOffset: 8, key: "K18")])
+
+        let branchWord = readWord(result.fileData, at: Int(siteAddress))
+        XCTAssertEqual(branchTarget(branchWord, pc: Int64(siteAddress)), layout.patchOffset)
+
+        let patchInstructions = try decoder.disassemble(
+            result.patchData, at: UInt64(layout.patchOffset)
+        )
+        XCTAssertEqual(patchInstructions.map(\\.mnemonic),
+                       ["stp", "mrs", "adrp", "ldr", "add", "adrp", "add", "str", "ldp", "b"])
+
+        // Decode the emitted ADRP using the architectural immediate fields,
+        // not Capstone's formatted operand text, then apply the ADD low bits.
+        let targetPage = adrpTarget(
+            patchInstructions[5].word,
+            pc: Int64(layout.patchOffset) + 20
+        )
+        let lowOffset = Int((patchInstructions[6].word >> 10) & 0xFFF)
+        XCTAssertEqual(targetPage + Int64(lowOffset), 0x3000)
+        XCTAssertEqual(patchInstructions[8].mnemonic, "ldp")
+        XCTAssertEqual(patchInstructions[9].mnemonic, "b")
+        XCTAssertEqual(branchTarget(patchInstructions[9].word,
+                                    pc: Int64(layout.patchOffset) + 36),
+                       Int64(siteAddress + 4))
+    }
+
+    private func readWord(_ data: Data, at offset: Int) -> UInt32 {
+        UInt32(data[offset]) |
+            (UInt32(data[offset + 1]) << 8) |
+            (UInt32(data[offset + 2]) << 16) |
+            (UInt32(data[offset + 3]) << 24)
+    }
+
+    private func signExtend(_ value: UInt64, bits: Int) -> Int64 {
+        let shift = 64 - bits
+        return Int64(bitPattern: value << shift) >> shift
+    }
+
+    private func adrpTarget(_ word: UInt32, pc: Int64) -> Int64 {
+        let immlo = UInt64((word >> 29) & 0x3)
+        let immhi = UInt64((word >> 5) & 0x7FFFF)
+        let pages = signExtend((immhi << 2) | immlo, bits: 21)
+        return (pc & ~Int64(0xFFF)) + pages * 0x1000
+    }
+
+    private func branchTarget(_ word: UInt32, pc: Int64) -> Int64 {
+        let immediate = signExtend(UInt64(word & 0x03FFFFFF), bits: 26)
+        return pc + immediate * 4
+    }
+
     private func segment(_ index: Int, _ offset: UInt32, _ size: UInt32) -> NSOImage.Segment {
         NSOImage.Segment(
             index: index,
