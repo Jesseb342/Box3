@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 import XCTest
 @testable import ConverterCore
 
@@ -19,6 +20,38 @@ final class AESXTSTests: XCTestCase {
         let encrypted = try AESXTS.encrypt(dataUnit: plaintext, combinedKey: key, tweak: tweak)
         XCTAssertEqual(encrypted, expected)
         XCTAssertEqual(try AESXTS.decrypt(dataUnit: encrypted, combinedKey: key, tweak: tweak), plaintext)
+    }
+
+    func testNintendoSectorXTSKnownAnswerVectors() throws {
+        // Independent AES-XTS known-answer outputs for the Nintendo NCA tweak
+        // layout. Reference ciphertexts were generated outside this Swift
+        // implementation; full-sector SHA-256 catches any block/tweak mismatch.
+        let key = Data((0..<32).map { UInt8($0 + 1) })
+        let vectors: [(sector: Int, sha256: String)] = [
+            (0, "5826fc86da1c216812215341386e4a16f13de7e26fd36cbbe0f42d218bf550ab"),
+            (1, "b2cda8fd88c7a975591dac22306a2930afcfbb303779ca56dee0f2269a9cf000"),
+            (5, "84607b126fad64191b2e01c98b4366c1fb8cafa3037b20ff63afb299d9023dd0")
+        ]
+
+        for vector in vectors {
+            let plaintext = Data((0..<0x200).map {
+                UInt8(($0 * 13 + vector.sector * 7) & 0xff)
+            })
+            let tweak = AESXTS.ncaSectorTweak(UInt64(vector.sector))
+            let encrypted = try AESXTS.encrypt(
+                dataUnit: plaintext,
+                combinedKey: key,
+                tweak: tweak
+            )
+            let digest = SHA256.hash(data: encrypted)
+                .map { String(format: "%02x", $0) }
+                .joined()
+            XCTAssertEqual(digest, vector.sha256, "sector \\(vector.sector)")
+            XCTAssertEqual(
+                try AESXTS.decrypt(dataUnit: encrypted, combinedKey: key, tweak: tweak),
+                plaintext
+            )
+        }
     }
 
     func testNintendoSectorTweakUsesBigEndianSectorNumber() {
