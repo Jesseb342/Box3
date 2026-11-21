@@ -113,6 +113,103 @@ public enum NSORewriteEmitter {
         )
     }
 
+    public static func emitSystemRegisterRead(
+        _ site: NSORewriteSite,
+        patchAddress: Int64,
+        keyPageOffset: Int64
+    ) throws -> NSORewriteBlock {
+        let key: String
+        let keyIndex: Int
+        switch site.kind {
+        case .tpidrRead: key = "KTLS"; keyIndex = 1
+        case .tpidrroRead: key = "KTLR"; keyIndex = 2
+        default: throw NSORewriteEmissionError.unsupportedSite(site.kind)
+        }
+        let destination = Int(site.instructionWord & 31)
+        guard destination != 31 else {
+            throw NSORewriteEmissionError.insufficientScratchRegisters
+        }
+        let temporary = destination == 16 ? 17 : 16
+        var words: [UInt32] = []
+        var fixups: [NSORewriteFixup] = []
+        emitWord(try AArch64Encoder.stur(temporary, base: 31, offset: -16), into: &words)
+        emitWord(try AArch64Encoder.mrsTPIDRRO(destination), into: &words)
+        let keyPC = try patchPC(patchAddress, wordCount: words.count)
+        fixups.append(NSORewriteFixup(byteOffset: words.count * 4, key: key))
+        emitWord(try AArch64Encoder.adrp(temporary, pc: keyPC, target: keyPageOffset), into: &words)
+        emitWord(try AArch64Encoder.ldrX(temporary, base: temporary, immediate12: keyIndex), into: &words)
+        emitWord(try AArch64Encoder.addRegister(destination, source: destination, operand: temporary), into: &words)
+        emitWord(try AArch64Encoder.ldrX(destination, base: destination), into: &words)
+        emitWord(try AArch64Encoder.ldur(temporary, base: 31, offset: -16), into: &words)
+        return try finish(
+            site: site,
+            kind: site.kind,
+            words: words,
+            fixups: fixups,
+            patchAddress: patchAddress
+        )
+    }
+
+    public static func emitSystemRegisterWrite(
+        _ site: NSORewriteSite,
+        patchAddress: Int64,
+        keyPageOffset: Int64
+    ) throws -> NSORewriteBlock {
+        guard site.kind == .tpidrWrite else {
+            throw NSORewriteEmissionError.unsupportedSite(site.kind)
+        }
+        let source = Int(site.instructionWord & 31)
+        let scratch = (0..<16).first(where: { $0 != source })!
+        let temporary = [16, 17].first(where: { $0 != source && $0 != scratch })!
+        var words: [UInt32] = []
+        var fixups: [NSORewriteFixup] = []
+        emitWord(try AArch64Encoder.stur(scratch, base: 31, offset: -16), into: &words)
+        emitWord(try AArch64Encoder.stur(temporary, base: 31, offset: -24), into: &words)
+        emitWord(try AArch64Encoder.mrsTPIDRRO(scratch), into: &words)
+        let keyPC = try patchPC(patchAddress, wordCount: words.count)
+        fixups.append(NSORewriteFixup(byteOffset: words.count * 4, key: "KTLS"))
+        emitWord(try AArch64Encoder.adrp(temporary, pc: keyPC, target: keyPageOffset), into: &words)
+        emitWord(try AArch64Encoder.ldrX(temporary, base: temporary, immediate12: 1), into: &words)
+        emitWord(try AArch64Encoder.addRegister(scratch, source: scratch, operand: temporary), into: &words)
+        emitWord(try AArch64Encoder.strX(source, base: scratch), into: &words)
+        emitWord(try AArch64Encoder.ldur(temporary, base: 31, offset: -24), into: &words)
+        emitWord(try AArch64Encoder.ldur(scratch, base: 31, offset: -16), into: &words)
+        return try finish(
+            site: site,
+            kind: site.kind,
+            words: words,
+            fixups: fixups,
+            patchAddress: patchAddress
+        )
+    }
+
+    private static func finish(
+        site: NSORewriteSite,
+        kind: NSORewriteSiteKind,
+        words: [UInt32],
+        fixups: [NSORewriteFixup],
+        patchAddress: Int64
+    ) throws -> NSORewriteBlock {
+        let branch = try AArch64Encoder.b(from: Int64(site.address), to: patchAddress)
+        return NSORewriteBlock(
+            siteAddress: site.address,
+            kind: kind,
+            words: words,
+            fixups: fixups,
+            siteBranchWord: branch
+        )
+    }
+
+    private static func patchPC(_ base: Int64, wordCount: Int) throws -> Int64 {
+        let (address, overflow) = base.addingReportingOverflow(Int64(wordCount) * 4)
+        guard !overflow else { throw NSORewriteEmissionError.addressOutOfRange }
+        return address
+    }
+
+    private static func emitWord(_ word: UInt32, into words: inout [UInt32]) {
+        words.append(word)
+    }
+
     private static func registers(in instruction: DecodedAArch64Instruction) -> Set<Int> {
         Set(instruction.allRegisters.compactMap { name in
             guard let first = name.first, first == "x" || first == "w",
