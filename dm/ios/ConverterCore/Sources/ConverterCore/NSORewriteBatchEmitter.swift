@@ -70,7 +70,8 @@ public enum NSORewriteBatchEmitter {
 
             if site.kind == .cacheTypeRead {
                 let register = site.argument ?? 32
-                guard register != 18, register <= 31 else {
+                guard register == (site.instructionWord & 31),
+                      register != 18, register <= 31 else {
                     throw NSORewriteBatchError.unsupportedSite(site.kind, site.address)
                 }
                 writeUInt32LE(0xD2A00080 | register, to: &image, at: offset)
