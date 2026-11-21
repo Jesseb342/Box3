@@ -63,10 +63,16 @@ public enum AArch64RegisterSubstitution {
         guard expression.firstMatch(in: operands, range: range) != nil else {
             throw AArch64SubstitutionError.instructionDoesNotMentionX18
         }
-        return expression.stringByReplacingMatches(
-            in: operands,
-            range: range,
-            withTemplate: "${1}\(register)"
-        )
+        let matches = expression.matches(in: operands, range: range)
+        let source = operands as NSString
+        let output = NSMutableString(string: operands)
+        for match in matches.reversed() {
+            let prefix = source.substring(with: match.range(at: 1))
+            output.replaceCharacters(
+                in: match.range,
+                with: prefix + String(register)
+            )
+        }
+        return output as String
     }
 }
