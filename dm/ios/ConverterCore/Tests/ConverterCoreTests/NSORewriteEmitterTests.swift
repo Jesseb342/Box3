@@ -33,6 +33,74 @@ final class NSORewriteEmitterTests: XCTestCase {
         XCTAssertEqual(decodedBlock[9].mnemonic, "b")
     }
 
+
+    func testEmitsX18StackPointerRewriteAndRestoresOriginalStackBase() throws {
+        let decoder = try AArch64Disassembler()
+        let instruction = try XCTUnwrap(decoder.disassemble(
+            Data([0x5F, 0x02, 0x00, 0x91]), at: 0x1000
+        ).first)
+        let plan = try NSORewritePlanner.plan(
+            instructions: [instruction],
+            codeRanges: [try NSOCodeRange(start: 0x1000, end: 0x1004)]
+        )
+        let site = try XCTUnwrap(plan.sites.first)
+        XCTAssertEqual(site.kind, .x18StackPointer)
+        let block = try NSORewriteEmitter.emitX18StackPointer(
+            site, patchAddress: 0x2000, keyPageOffset: 0x8000, decoder: decoder
+        )
+        XCTAssertEqual(block.words.count, 10)
+        XCTAssertEqual(block.fixups, [NSORewriteFixup(byteOffset: 8, key: "K18")])
+        let decoded = try decoder.disassemble(block.data, at: 0x2000)
+        XCTAssertEqual(decoded.map(\.mnemonic), [
+            "stp", "mrs", "adrp", "ldr", "add", "ldr", "add", "add", "ldp", "b"
+        ])
+        XCTAssertEqual(decoded[8].operandString, "x0, x1, [x1, #-0x10]")
+    }
+
+    func testEmitsCBZX18WithBothPathsRestoringScratchRegisters() throws {
+        let decoder = try AArch64Disassembler()
+        let instruction = try XCTUnwrap(decoder.disassemble(
+            Data([0x12, 0x01, 0x00, 0xB4]), at: 0x1000
+        ).first)
+        let plan = try NSORewritePlanner.plan(
+            instructions: [instruction],
+            codeRanges: [try NSOCodeRange(start: 0x1000, end: 0x1004)]
+        )
+        let site = try XCTUnwrap(plan.sites.first)
+        XCTAssertEqual(site.kind, .x18Conditional)
+        let block = try NSORewriteEmitter.emitX18Conditional(
+            site, patchAddress: 0x2000, keyPageOffset: 0x8000, decoder: decoder
+        )
+        XCTAssertEqual(block.words.count, 11)
+        XCTAssertEqual(block.fixups, [NSORewriteFixup(byteOffset: 8, key: "K18")])
+        let decoded = try decoder.disassemble(block.data, at: 0x2000)
+        XCTAssertEqual(decoded[6].mnemonic, "cbz")
+        XCTAssertEqual(decoded[6].operandString, "x0, #0x2024")
+        XCTAssertEqual(decoded[7].mnemonic, "ldp")
+        XCTAssertEqual(decoded[8].mnemonic, "b")
+        XCTAssertEqual(decoded[9].mnemonic, "ldp")
+        XCTAssertEqual(decoded[10].mnemonic, "b")
+    }
+
+    func testEmitsTBZX18ConditionalRewrite() throws {
+        let decoder = try AArch64Disassembler()
+        let instruction = try XCTUnwrap(decoder.disassemble(
+            Data([0x12, 0x01, 0x18, 0x36]), at: 0x1000
+        ).first)
+        let plan = try NSORewritePlanner.plan(
+            instructions: [instruction],
+            codeRanges: [try NSOCodeRange(start: 0x1000, end: 0x1004)]
+        )
+        let site = try XCTUnwrap(plan.sites.first)
+        XCTAssertEqual(site.kind, .x18Conditional)
+        let block = try NSORewriteEmitter.emitX18Conditional(
+            site, patchAddress: 0x2000, keyPageOffset: 0x8000, decoder: decoder
+        )
+        let decoded = try decoder.disassemble(block.data, at: 0x2000)
+        XCTAssertEqual(decoded[6].mnemonic, "tbz")
+        XCTAssertEqual(decoded[6].operandString, "x0, #3, #0x2024")
+    }
+
     func testRejectsStackPointerDestination() throws {
         let site = NSORewriteSite(
             address: 0x1000,
