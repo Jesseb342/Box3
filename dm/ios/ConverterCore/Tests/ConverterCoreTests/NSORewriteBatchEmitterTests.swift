@@ -27,7 +27,7 @@ final class NSORewriteBatchEmitterTests: XCTestCase {
         base[0x1002] = 0x01
         base[0x1003] = 0x8b
 
-        let result = try NSORewriteBatchEmitter.emitPlainX18Sites(
+        let result = try NSORewriteBatchEmitter.emitSupportedSites(
             baseImage: base,
             plan: plan,
             layout: layout,
@@ -66,7 +66,7 @@ final class NSORewriteBatchEmitterTests: XCTestCase {
         )
         var base = Data(repeating: 0, count: Int(layout.fileImageLength))
         base.replaceSubrange(0..<8, with: code)
-        let result = try NSORewriteBatchEmitter.emitPlainX18Sites(
+        let result = try NSORewriteBatchEmitter.emitSupportedSites(
             baseImage: base,
             plan: plan,
             layout: layout,
@@ -103,7 +103,7 @@ final class NSORewriteBatchEmitterTests: XCTestCase {
             codeRanges: [try NSOCodeRange(start: 0x1000, end: 0x1010)],
             decoder: decoder
         )
-        let result = try NSORewriteBatchEmitter.emitPlainX18Sites(
+        let result = try NSORewriteBatchEmitter.emitSupportedSites(
             baseImage: base,
             plan: plan,
             layout: layout,
@@ -156,7 +156,7 @@ final class NSORewriteBatchEmitterTests: XCTestCase {
             ],
             bssSize: 0x2000
         )
-        XCTAssertThrowsError(try NSORewriteBatchEmitter.emitPlainX18Sites(
+        XCTAssertThrowsError(try NSORewriteBatchEmitter.emitSupportedSites(
             baseImage: Data(repeating: 0, count: Int(layout.fileImageLength)),
             plan: plan,
             layout: layout,
@@ -180,7 +180,7 @@ final class NSORewriteBatchEmitterTests: XCTestCase {
             ],
             bssSize: 0x2000
         )
-        XCTAssertThrowsError(try NSORewriteBatchEmitter.emitPlainX18Sites(
+        XCTAssertThrowsError(try NSORewriteBatchEmitter.emitSupportedSites(
             baseImage: Data(repeating: 0, count: Int(layout.fileImageLength)),
             plan: plan,
             layout: layout,
@@ -211,7 +211,7 @@ final class NSORewriteBatchEmitterTests: XCTestCase {
             ],
             bssSize: 0x2000
         )
-        XCTAssertThrowsError(try NSORewriteBatchEmitter.emitPlainX18Sites(
+        XCTAssertThrowsError(try NSORewriteBatchEmitter.emitSupportedSites(
             baseImage: Data(repeating: 0, count: Int(layout.fileImageLength)),
             plan: plan,
             layout: layout,
