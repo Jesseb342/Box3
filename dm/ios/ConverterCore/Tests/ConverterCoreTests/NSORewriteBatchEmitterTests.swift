@@ -45,6 +45,41 @@ final class NSORewriteBatchEmitterTests: XCTestCase {
         XCTAssertEqual(branchWord, try AArch64Encoder.b(from: 0x1000, to: layout.patchOffset))
     }
 
+    func testCombinesPlainX18AndTPIDRReadStubs() throws {
+        let decoder = try AArch64Disassembler()
+        let code = Data([
+            0x40, 0x02, 0x01, 0x8b, // add x0, x18, x1
+            0x43, 0xd0, 0x3b, 0xd5  // mrs x3, tpidr_el0
+        ])
+        let plan = try NSORewritePlanner.plan(
+            image: code,
+            codeRanges: [try NSOCodeRange(start: 0, end: 8)],
+            decoder: decoder
+        )
+        let layout = try NSOPatchLayout.make(
+            segments: [
+                segment(0, 0, 0x2000),
+                segment(1, 0x2000, 0x1000),
+                segment(2, 0x3000, 0x1000)
+            ],
+            bssSize: 0x2000
+        )
+        var base = Data(repeating: 0, count: Int(layout.fileImageLength))
+        base.replaceSubrange(0..<8, with: code)
+        let result = try NSORewriteBatchEmitter.emitPlainX18Sites(
+            baseImage: base,
+            plan: plan,
+            layout: layout,
+            decoder: decoder
+        )
+        XCTAssertEqual(result.patchedSiteCount, 2)
+        XCTAssertEqual(result.patchData.count, 72)
+        XCTAssertEqual(result.fixups, [
+            NSORewriteFixup(byteOffset: 8, key: "K18"),
+            NSORewriteFixup(byteOffset: 48, key: "KTLS")
+        ])
+    }
+
     func testRejectsMixedUnimplementedSiteKindsWithoutPartialOutput() throws {
         let plan = NSORewritePlan(
             sites: [
