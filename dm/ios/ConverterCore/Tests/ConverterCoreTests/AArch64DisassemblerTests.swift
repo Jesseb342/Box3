@@ -1,4 +1,3 @@
-import Capstone
 import Foundation
 import XCTest
 @testable import ConverterCore
@@ -23,8 +22,8 @@ final class AArch64DisassemblerTests: XCTestCase {
         // add x0, x18, x1
         let code = Data([0x40, 0x02, 0x01, 0x8b])
         let instruction = try XCTUnwrap(decoder.disassemble(code).first)
-        let reads = instruction.regsRead.compactMap { decoder.registerName($0) }
-        let writes = instruction.regsWritten.compactMap { decoder.registerName($0) }
+        let reads = instruction.registersRead
+        let writes = instruction.registersWritten
         XCTAssertTrue(reads.contains("x18"))
         XCTAssertTrue(writes.contains("x0"))
     }
