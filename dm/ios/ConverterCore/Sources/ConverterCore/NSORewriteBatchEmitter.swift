@@ -37,6 +37,9 @@ public enum NSORewriteBatchEmitter {
             throw NSORewriteBatchError.unsupportedSite(site.kind, site.address)
         }
 
+        guard layout.keyPageOffset <= UInt64(Int64.max) else {
+            throw NSORewriteBatchError.invalidPatchOffset
+        }
         var image = baseImage
         var patch = Data()
         var fixups: [NSORewriteFixup] = []
