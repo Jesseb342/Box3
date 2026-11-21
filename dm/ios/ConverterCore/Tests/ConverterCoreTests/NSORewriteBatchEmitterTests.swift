@@ -86,6 +86,33 @@ final class NSORewriteBatchEmitterTests: XCTestCase {
         }
     }
 
+    func testRejectsAnyUndecodableInstructionBeforeEmission() throws {
+        let plan = NSORewritePlan(
+            sites: [],
+            counts: [:],
+            undecodableAddresses: [0x1004]
+        )
+        let layout = try NSOPatchLayout.make(
+            segments: [
+                segment(0, 0, 0x2000),
+                segment(1, 0x2000, 0x1000),
+                segment(2, 0x3000, 0x1000)
+            ],
+            bssSize: 0x2000
+        )
+        XCTAssertThrowsError(try NSORewriteBatchEmitter.emitPlainX18Sites(
+            baseImage: Data(repeating: 0, count: Int(layout.fileImageLength)),
+            plan: plan,
+            layout: layout,
+            decoder: try AArch64Disassembler()
+        )) {
+            XCTAssertEqual(
+                $0 as? NSORewriteBatchError,
+                .containsUndecodableInstructions([0x1004])
+            )
+        }
+    }
+
     func testRejectsChangedOriginalInstruction() throws {
         let decoder = try AArch64Disassembler()
         let instruction = try XCTUnwrap(decoder.disassemble(
