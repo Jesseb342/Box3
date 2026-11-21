@@ -481,7 +481,15 @@ static void remap_at(module_t *m, vm_address_t to, const void *from, unsigned lo
     if (kr != KERN_SUCCESS || a != to) die("%s vm_remap %p → %#lx (%#lx bytes) failed: %d", m->name, from, (unsigned long)to, size, kr);
     if ((cur & need) != need) die("%s permissions after vm_remap %#x, missing %#x", m->name, cur, need);
 }
-#define IMAGE_MH (&_mh_execute_header)
+// The Nusa converter stores rewritten guest modules in Frameworks/GameModules.dylib.
+// Ordinary Box3 builds keep the module sections in the main executable, so default
+// to that image and let the iOS bootstrap switch this pointer when the external
+// module dylib is present.
+static const struct mach_header *g_module_image_header = (const struct mach_header *)&_mh_execute_header;
+void dm_module_image_set(const struct mach_header *mh) {
+    if (mh) g_module_image_header = mh;
+}
+#define IMAGE_MH (g_module_image_header)
 // The NRO modules (loader.c "NRO modules") are packed instead of getting sections of their own: a Mach-O file has at most 255 sections, and Super Smash Bros. Ultimate's 98 NROs would
 // take 294. gen_embed.py puts their pieces one after another, each 16K aligned, in __TEXT,__dm_nro_x0 / __DM_NRO_W,__img / __TEXT,__dm_nro_x1, and __DATA,__dm_nro_tab lists them:
 // 32 bytes of name, then the offset and length of its x0, W and x1 pieces in their sections (u64 each). A module name never holds an underscore, so these names meet no module's
