@@ -34,7 +34,7 @@ final class NSOPatchLayoutTests: XCTestCase {
         )
         XCTAssertTrue(layout.isFar)
         XCTAssertTrue(layout.isBigText)
-        XCTAssertLessThan(abs(layout.patchOffset), NSOPatchLayout.defaultFront)
+        XCTAssertLessThan(UInt64(-layout.patchOffset), NSOPatchLayout.defaultFront)
         XCTAssertEqual(UInt64(-layout.patchOffset) & 0xffff, 0)
     }
 
