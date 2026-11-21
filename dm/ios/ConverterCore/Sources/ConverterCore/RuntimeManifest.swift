@@ -99,13 +99,13 @@ public struct RuntimeManifest: Codable, Equatable {
     /// The resolved URL must remain inside the supplied root directory.
     public func verifyFiles(rootURL: URL, fileManager: FileManager = .default) throws {
         try validate()
-        let root = rootURL.standardizedFileURL
+        let root = rootURL.resolvingSymlinksInPath().standardizedFileURL
         let rootPrefix = root.path.hasSuffix("/") ? root.path : root.path + "/"
 
         let entries = modules.map { ($0.path, $0.sha256) } +
                       resources.map { ($0.path, $0.sha256) }
         for (relativePath, expectedHash) in entries {
-            let candidate = root.appendingPathComponent(relativePath).standardizedFileURL
+            let candidate = root.appendingPathComponent(relativePath).resolvingSymlinksInPath().standardizedFileURL
             guard candidate.path.hasPrefix(rootPrefix) else {
                 throw RuntimeManifestError.invalidRelativePath(relativePath)
             }
