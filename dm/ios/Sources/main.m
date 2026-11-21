@@ -104,7 +104,9 @@ static int boot_env(void) {
     setenv("DM_NVN_SHMAP", [dm stringByAppendingPathComponent:@"shader_map.tsv"].fileSystemRepresentation, 0);
     NSString *msl = [host isEqualToString:res] ? [res stringByAppendingPathComponent:@"msl"] : host;
     setenv("DM_MSL_DIR", msl.fileSystemRepresentation, 0);
-    setenv("DM_FONT_DIR", [dm stringByAppendingPathComponent:@"font"].fileSystemRepresentation, 0);   // Shared-font stand-ins (standard.ttf / nintendo_ext.ttf): iOS lacks the macOS font path
+    NSString *font = [dm stringByAppendingPathComponent:@"font"];
+    if (![fm fileExistsAtPath:font]) font = dm;   // Nusa keeps standard.ttf and nintendo_ext.ttf directly in HostResources/dm.
+    setenv("DM_FONT_DIR", font.fileSystemRepresentation, 0);   // Shared-font stand-ins (standard.ttf / nintendo_ext.ttf): iOS lacks the macOS font path
     NSString *aoc = [res stringByAppendingPathComponent:@"aoc"];
     if (![fm fileExistsAtPath:aoc]) aoc = [host stringByAppendingPathComponent:@"aoc"];   // add-on content: build_ipa.sh puts the RomFS extracted from the player's DLC NSPs at <App>/aoc/<index>/
     if ([fm fileExistsAtPath:aoc]) setenv("DM_AOC_DIR", aoc.fileSystemRepresentation, 0);
