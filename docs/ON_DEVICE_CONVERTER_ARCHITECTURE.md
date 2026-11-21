@@ -164,11 +164,12 @@ The `ios-on-device-converter` branch now contains these native Swift foundations
 - Raw LZ4 block decompression and bounded text/ro/data segment reconstruction.
 - Checked AArch64 instruction encoders for the instruction forms used by the existing rewriter.
 - A strict Capstone-backed AArch64 disassembler adapter with full register/operand detail and rejection of partial instruction streams.
+- A conservative rewrite-site planner for SVC, thread-pointer registers, counter/cache registers, stack alignment, and x18 instruction categories. It inventories candidates but does not emit rewritten code.
 - Near/far NSO patch-area and key-page layout calculation.
 
 These are core-library components, not a finished converter app. The app's file-import UI, NCA content decryption/extraction, complete AArch64 decoder and NSO rewrite, shader translation, runtime assembly, and IPA packaging remain incomplete. CI must pass before these new components are considered build-validated; real fixture parity and iPhone 14 runtime validation are separate acceptance gates.
 
 ## Immediate next engineering task
 
-Continue Gate C by implementing the conservative NSO rewrite planner on top of the Capstone-backed decoder. Reproduce the existing Python rewriter's instruction classification, x18 substitutions, system-register rewrites, host-gate stubs, and relocation behavior on synthetic instruction fixtures, then compare byte-for-byte against legally owned NSO fixtures. Do not emit a rewritten executable until unsupported instruction forms, branch reach, patch-site assertions, and fixup metadata are all handled explicitly. Preserve the existing profile tables as data and do not guess at unknown builds.
+Continue Gate C by implementing safe x18 substitution and the first proven rewrite emitters, then port system-register and host-gate stubs. Complex x18 jump tables, exclusive windows, spin waits, registered cuts, and observation gates must remain explicitly unsupported until their original context analysis and relocation behavior are ported. Do not emit a rewritten executable until unsupported instruction forms, branch reach, patch-site assertions, and fixup metadata are all handled explicitly. Preserve the existing profile tables as data and do not guess at unknown builds.
 
