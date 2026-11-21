@@ -159,8 +159,10 @@ public enum NSORewriteEmitter {
             throw NSORewriteEmissionError.unsupportedSite(site.kind)
         }
         let source = Int(site.instructionWord & 31)
-        let scratch = (0..<16).first(where: { $0 != source })!
-        let temporary = [16, 17].first(where: { $0 != source && $0 != scratch })!
+        guard let scratch = (0..<16).first(where: { $0 != source }),
+              let temporary = [16, 17].first(where: { $0 != source && $0 != scratch }) else {
+            throw NSORewriteEmissionError.insufficientScratchRegisters
+        }
         var words: [UInt32] = []
         var fixups: [NSORewriteFixup] = []
         emitWord(try AArch64Encoder.stur(scratch, base: 31, offset: -16), into: &words)
