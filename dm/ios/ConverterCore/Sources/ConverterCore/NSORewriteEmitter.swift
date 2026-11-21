@@ -122,6 +122,108 @@ public enum NSORewriteEmitter {
         )
     }
 
+    /// Rewrites an x18-dependent instruction whose destination is SP. The original SP
+    /// is copied to the second scratch register so the save area is restored relative
+    /// to the pre-instruction stack pointer, matching patch_nso.py's site_sp sequence.
+    public static func emitX18StackPointer(
+        _ site: NSORewriteSite,
+        patchAddress: Int64,
+        keyPageOffset: Int64,
+        decoder: AArch64Disassembler
+    ) throws -> NSORewriteBlock {
+        guard site.kind == .x18StackPointer,
+              site.address <= UInt64(Int64.max) else {
+            throw NSORewriteEmissionError.unsupportedSite(site.kind)
+        }
+        let original = try decodeOriginal(site, decoder: decoder)
+        let destination = String(site.operands.split(separator: ",", maxSplits: 1).first ?? "")
+            .trimmingCharacters(in: .whitespaces)
+        guard destination == "sp" || destination == "wsp" else {
+            throw NSORewriteEmissionError.siteInstructionMismatch
+        }
+        let used = registers(in: original)
+        let scratch = (0..<16).filter { !used.contains($0) }
+        guard scratch.count >= 2 else {
+            throw NSORewriteEmissionError.insufficientScratchRegisters
+        }
+        let s = scratch[0], t = scratch[1]
+        let substituted = try AArch64RegisterSubstitution.replaceX18(in: original, with: s, decoder: decoder)
+        var words = [
+            try AArch64Encoder.stp(s, t, base: 31, offset: -16),
+            try AArch64Encoder.mrsTPIDRRO(t)
+        ]
+        let keyPC = try patchPC(patchAddress, wordCount: words.count)
+        let fixup = NSORewriteFixup(byteOffset: words.count * 4, key: "K18")
+        words.append(try AArch64Encoder.adrp(s, pc: keyPC, target: keyPageOffset))
+        words.append(try AArch64Encoder.ldrX(s, base: s))
+        words.append(try AArch64Encoder.addRegister(t, source: t, operand: s))
+        words.append(try AArch64Encoder.ldrX(s, base: t))
+        words.append(try AArch64Encoder.addImmediate(t, source: 31, immediate: 0))
+        words.append(substituted)
+        words.append(try AArch64Encoder.ldp(s, t, base: t, offset: -16))
+        return try finish(site: site, kind: site.kind, words: words, fixups: [fixup], patchAddress: patchAddress)
+    }
+
+    /// Rewrites CBZ/CBNZ/TBZ/TBNZ sites that test x18/w18. The taken and
+    /// fall-through paths each restore the scratch save before leaving the stub.
+    public static func emitX18Conditional(
+        _ site: NSORewriteSite,
+        patchAddress: Int64,
+        keyPageOffset: Int64,
+        decoder: AArch64Disassembler
+    ) throws -> NSORewriteBlock {
+        guard site.kind == .x18Conditional,
+              site.address <= UInt64(Int64.max) else {
+            throw NSORewriteEmissionError.unsupportedSite(site.kind)
+        }
+        let original = try decodeOriginal(site, decoder: decoder)
+        let word = site.instructionWord
+        let isCompareBranch = word & 0x7E000000 == 0x34000000
+        let isTestBranch = word & 0x7E000000 == 0x36000000
+        guard isCompareBranch || isTestBranch,
+              original.mnemonic == "cbz" || original.mnemonic == "cbnz" ||
+              original.mnemonic == "tbz" || original.mnemonic == "tbnz" else {
+            throw NSORewriteEmissionError.unsupportedSite(site.kind)
+        }
+        let used = registers(in: original)
+        let scratch = (0..<16).filter { !used.contains($0) }
+        guard scratch.count >= 2 else { throw NSORewriteEmissionError.insufficientScratchRegisters }
+        let s = scratch[0], t = scratch[1]
+        let substituted = try AArch64RegisterSubstitution.replaceX18(in: original, with: s, decoder: decoder)
+        let originalTarget = try conditionalTarget(word: word, address: Int64(site.address), compareBranch: isCompareBranch)
+        var words = [
+            try AArch64Encoder.stp(s, t, base: 31, offset: -16),
+            try AArch64Encoder.mrsTPIDRRO(t)
+        ]
+        let keyPC = try patchPC(patchAddress, wordCount: words.count)
+        let fixup = NSORewriteFixup(byteOffset: words.count * 4, key: "K18")
+        words.append(try AArch64Encoder.adrp(s, pc: keyPC, target: keyPageOffset))
+        words.append(try AArch64Encoder.ldrX(s, base: s))
+        words.append(try AArch64Encoder.addRegister(t, source: t, operand: s))
+        words.append(try AArch64Encoder.ldrX(s, base: t))
+        let branchIndex = words.count
+        let branchPC = try patchPC(patchAddress, wordCount: branchIndex)
+        let takenAddress = try patchPC(patchAddress, wordCount: branchIndex + 3)
+        let delta = takenAddress - branchPC
+        guard delta % 4 == 0 else { throw NSORewriteEmissionError.addressOutOfRange }
+        let immediate = Int(delta / 4)
+        let rewritten = isCompareBranch
+            ? ((word & 0xFF00001F) | ((UInt32(immediate) & 0x7FFFF) << 5) | UInt32(s))
+            : ((word & 0xFFF8001F) | ((UInt32(immediate) & 0x3FFF) << 5) | UInt32(s))
+        words.append(rewritten)
+        words.append(try AArch64Encoder.ldp(s, t, base: 31, offset: -16))
+        let fallthroughBranchPC = try patchPC(patchAddress, wordCount: words.count)
+        let (fallthrough, overflow) = Int64(site.address).addingReportingOverflow(4)
+        guard !overflow else { throw NSORewriteEmissionError.addressOutOfRange }
+        words.append(try AArch64Encoder.b(from: fallthroughBranchPC, to: fallthrough))
+        words.append(try AArch64Encoder.ldp(s, t, base: 31, offset: -16))
+        let takenBranchPC = try patchPC(patchAddress, wordCount: words.count)
+        words.append(try AArch64Encoder.b(from: takenBranchPC, to: originalTarget))
+        let siteBranch = try AArch64Encoder.b(from: Int64(site.address), to: patchAddress)
+        return NSORewriteBlock(siteAddress: site.address, kind: site.kind, words: words,
+                              fixups: [fixup], siteBranchWord: siteBranch, gate: nil)
+    }
+
     public static func emitSystemRegisterRead(
         _ site: NSORewriteSite,
         patchAddress: Int64,
@@ -326,6 +428,36 @@ public enum NSORewriteEmitter {
             siteBranchWord: branch,
             gate: nil
         )
+    }
+
+    private static func decodeOriginal(
+        _ site: NSORewriteSite,
+        decoder: AArch64Disassembler
+    ) throws -> DecodedAArch64Instruction {
+        var word = site.instructionWord.littleEndian
+        var bytes = Data()
+        withUnsafeBytes(of: &word) { bytes.append(contentsOf: $0) }
+        guard let decoded = try decoder.disassemble(bytes, at: site.address).first,
+              decoded.word == site.instructionWord,
+              decoded.mnemonic == site.mnemonic,
+              decoded.operandString == site.operands else {
+            throw NSORewriteEmissionError.siteInstructionMismatch
+        }
+        return decoded
+    }
+
+    private static func conditionalTarget(
+        word: UInt32,
+        address: Int64,
+        compareBranch: Bool
+    ) throws -> Int64 {
+        let encoded = compareBranch ? Int((word >> 5) & 0x7FFFF) : Int((word >> 5) & 0x3FFF)
+        let bits = compareBranch ? 19 : 14
+        let sign = 1 << (bits - 1)
+        let signedImmediate = (encoded ^ sign) - sign
+        let (target, overflow) = address.addingReportingOverflow(Int64(signedImmediate) * 4)
+        guard !overflow else { throw NSORewriteEmissionError.addressOutOfRange }
+        return target
     }
 
     private static func patchPC(_ base: Int64, wordCount: Int) throws -> Int64 {
