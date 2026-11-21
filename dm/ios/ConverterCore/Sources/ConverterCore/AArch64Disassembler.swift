@@ -7,6 +7,11 @@ public enum AArch64DisassemblyError: Error, Equatable {
     case unexpectedInstructionSize(offset: Int, size: Int)
 }
 
+public struct AArch64DisassemblyResult: Equatable {
+    public let instructions: [DecodedAArch64Instruction]
+    public let undecodableAddresses: [UInt64]
+}
+
 public struct DecodedAArch64Instruction: Equatable {
     public let address: UInt64
     public let word: UInt32
@@ -54,6 +59,49 @@ public final class AArch64Disassembler {
         return Set(expression.matches(in: operands, range: range).map {
             source.substring(with: $0.range)
         })
+    }
+
+    /// Decodes one word at a time and records invalid/trap words instead of
+    /// stopping the scan. This matches the desktop rewriter's recovery policy
+    /// for functions containing embedded trap instructions.
+    public func disassembleRecovering(_ code: Data, at address: UInt64 = 0) throws -> AArch64DisassemblyResult {
+        guard code.count % 4 == 0 else {
+            throw AArch64DisassemblyError.inputNotWordAligned(code.count)
+        }
+        var instructions: [DecodedAArch64Instruction] = []
+        var gaps: [UInt64] = []
+        for offset in stride(from: 0, to: code.count, by: 4) {
+            let (pc, overflow) = address.addingReportingOverflow(UInt64(offset))
+            guard !overflow else {
+                throw AArch64DisassemblyError.undecodableInstruction(offset: offset)
+            }
+            let word = code.subdata(in: offset..<(offset + 4))
+            guard let instruction = engine.disassemble(code: word, address: pc).first,
+                  instruction.size == 4,
+                  instruction.address == pc,
+                  instruction.bytes.count == 4 else {
+                gaps.append(pc)
+                continue
+            }
+            let bytes = instruction.bytes
+            let rawWord = UInt32(bytes[0]) |
+                (UInt32(bytes[1]) << 8) |
+                (UInt32(bytes[2]) << 16) |
+                (UInt32(bytes[3]) << 24)
+            instructions.append(DecodedAArch64Instruction(
+                address: pc,
+                word: rawWord,
+                mnemonic: instruction.mnemonic,
+                operandString: instruction.operandString,
+                registersRead: Set(instruction.regsRead.compactMap(registerName)),
+                registersWritten: Set(instruction.regsWritten.compactMap(registerName)),
+                registersMentioned: Self.registersMentioned(instruction.operandString)
+            ))
+        }
+        return AArch64DisassemblyResult(
+            instructions: instructions,
+            undecodableAddresses: gaps
+        )
     }
 
     public func disassemble(_ code: Data, at address: UInt64 = 0) throws -> [DecodedAArch64Instruction] {
