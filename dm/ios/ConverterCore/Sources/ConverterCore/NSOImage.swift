@@ -56,7 +56,7 @@ public struct NSOImage: Equatable {
             let memorySize = Self.u32(data, descriptor + 8)
             let storedSize = Self.u32(data, 0x60 + index * 4)
             let compressed = (flags & (1 << index)) != 0
-            let actualStoredSize = storedSize
+            let actualStoredSize = compressed ? storedSize : memorySize
 
             guard memorySize > 0, actualStoredSize > 0 else {
                 throw NSOError.invalidSegmentRange(index)
