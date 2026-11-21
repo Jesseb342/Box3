@@ -198,8 +198,8 @@ public enum NSORewriteEmitter {
         withUnsafeBytes(of: &substitutedLE) { substitutedBytes.append(contentsOf: $0) }
         guard let substitutedInstruction = try decoder.disassemble(substitutedBytes, at: site.address).first,
               substitutedInstruction.mnemonic == original.mnemonic,
-              substitutedInstruction.registersMentioned.contains("x\\(s)") ||
-                substitutedInstruction.registersMentioned.contains("w\\(s)") else {
+              substitutedInstruction.registersMentioned.contains("x\(s)") ||
+                substitutedInstruction.registersMentioned.contains("w\(s)") else {
             throw NSORewriteEmissionError.siteInstructionMismatch
         }
         let originalTarget = try conditionalTarget(word: word, address: Int64(site.address), compareBranch: isCompareBranch)
