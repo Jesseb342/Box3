@@ -84,8 +84,10 @@ public struct NSOPatchLayout: Equatable {
         let maximumFront = Self.branchReach - Self.branchSafetyMargin - textSize
         let isBigText = textSize + Self.defaultFront > Self.branchReach - Self.branchSafetyMargin
         let front: UInt64
-        if isBigText {
-            front = frontOverride ?? (maximumFront & ~(Self.patchAlignment - 1))
+        if let frontOverride {
+            front = frontOverride
+        } else if isBigText {
+            front = maximumFront & ~(Self.patchAlignment - 1)
         } else {
             front = Self.defaultFront
         }
