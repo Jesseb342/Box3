@@ -29,7 +29,7 @@ final class NSORewritePlannerTests: XCTestCase {
             decoded(0x8B010240, "add", "x0, x18, x1", address: 0x1000, registers: ["x0", "x1", "x18"]),
             decoded(0xD61F0240, "br", "x18", address: 0x1004, registers: ["x18"]),
             decoded(0xD63F0240, "blr", "x18", address: 0x1008, registers: ["x18"]),
-            decoded(0x54000040, "b.eq", "#0x1010", address: 0x100C, registers: ["x18"]),
+            decoded(0xB4000052, "cbz", "x18, #0x1010", address: 0x100C, registers: ["x18"]),
             decoded(0x90000012, "adrp", "x18, #0x2000", address: 0x1010, registers: ["x18"])
         ]
         let plan = try NSORewritePlanner.plan(
