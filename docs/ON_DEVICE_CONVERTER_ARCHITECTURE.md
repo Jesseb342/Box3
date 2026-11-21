@@ -76,6 +76,9 @@ Keep the app modular. UI code must orchestrate native conversion services and di
 2. **Package and content reader (native library)**
    - Read PFS0/HFS0 containers and XCI secure partitions.
    - Parse tickets, key sets, NCA headers/sections, and content metadata.
+   - The raw NCA header (0xC00 bytes) is AES-XTS encrypted in 0x200-byte sectors; its tweak byte order is non-standard. The new `NCAHeader` type parses only the decrypted header and must not be mistaken for a decryption implementation.
+   - Implement and regression-test the NCA AES-XTS header decryptor against known vectors and legally owned fixture NCAs before attempting content-section crypto.
+   - Then implement NCA key-area decryption, title-key/ticket handling, AES-CTR/AES-CTR-Ex section reads, integrity verification, and BKTR update overlays. These are separate crypto/storage layers, not one generic decrypt operation.
    - Decrypt and verify NCA content; layer the selected update over the base program; extract DLC independently.
    - Preserve control metadata (NACP, icon, version, title ID) for the generated app.
    - Initial implementation should port the narrow, proven LibHac paths used by `nx_extract`; do not attempt an unrelated full Switch filesystem rewrite.
@@ -117,8 +120,8 @@ Keep the app modular. UI code must orchestrate native conversion services and di
 - Deliver a dependency and licensing inventory before copying or porting third-party code.
 
 ### Gate B — native import/extraction
-- Implement on-device key parsing, PFS0/HFS0/XCI reading, NCA extraction/decryption, update layering, and DLC extraction.
-- Validate against known-good extracted file manifests and hashes from legally owned test dumps.
+- Implement on-device key parsing, PFS0/HFS0/XCI reading, AES-XTS NCA header decryption, NCA key-area/title-key handling, AES-CTR section decryption, integrity verification, update layering, and DLC extraction.
+- Validate the decrypted NCA header against LibHac/hactool reference output, then validate extracted ExeFS/RomFS manifests and hashes from legally owned test dumps.
 - Test large files, interrupted jobs, low free storage, and app suspension.
 
 ### Gate C — native executable rewrite
