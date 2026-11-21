@@ -17,7 +17,7 @@ full parity or successful game conversion.
 | Stack-alignment correction | `site_sp_align` | Implemented |
 | x18 used while writing SP | `site_sp` | Implemented as a separate emitter; batch-enabled |
 | Conditional x18 branch | `site_cond` | Implemented for CBZ/CBNZ/TBZ/TBNZ; batch-enabled |
-| ADR / ADRP involving x18 | `site_pcrel` | Implemented with absolute-target reconstruction; batch-enabled |
+| ADR / ADRP involving x18 | `site_pcrel` | Implemented with absolute-target reconstruction; batch-enabled | Scratch registers are restored before returning to the original instruction.
 
 ## Known gaps: do not silently enable these
 
