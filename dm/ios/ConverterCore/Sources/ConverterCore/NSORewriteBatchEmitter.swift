@@ -19,9 +19,8 @@ public struct NSORewriteBatchResult {
 }
 
 /// Builds a complete file-layout byte stream for modules whose rewrite plan
-/// consists exclusively of ordinary x18 sites. Any unimplemented site kind
-/// aborts the batch; this prevents silently producing a partially rewritten
-/// executable.
+/// contains only implemented site classes. Any unimplemented or undecodable
+/// site aborts the batch, preventing a partially rewritten executable.
 public enum NSORewriteBatchEmitter {
     public static func emitSupportedSites(
         baseImage: Data,
