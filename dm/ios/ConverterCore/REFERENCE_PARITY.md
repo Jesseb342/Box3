@@ -15,14 +15,14 @@ full parity or successful game conversion.
 | SVC and CNT[P/V]CT_EL0 host gates | `site_gate` | Implemented |
 | CTR_EL0 cache-line-size replacement | `ctr` classification / in-place MOVZ | Implemented |
 | Stack-alignment correction | `site_sp_align` | Implemented |
+| x18 used while writing SP | `site_sp` | Implemented as a separate emitter; batch-enabled |
+| Conditional x18 branch | `site_cond` | Implemented for CBZ/CBNZ/TBZ/TBNZ; batch-enabled |
+| ADR / ADRP involving x18 | `site_pcrel` | Implemented with absolute-target reconstruction; batch-enabled |
 
 ## Known gaps: do not silently enable these
 
 | Rewrite | Python reference | Swift status / required work |
 |---|---|---|
-| x18 used while writing SP | `site_sp` | Planner identifies it; no native emitter |
-| Conditional x18 branch | `site_cond` | Planner identifies it; no native emitter |
-| ADR / ADRP involving x18 | `site_pcrel` | Planner identifies it; no native emitter |
 | Indirect branch / jump table | `site_br`, `site_br_tab` | Planner identifies candidates; requires table/function analysis |
 | BLR x18 / tail-call BR x18 | `site_blr`, `site_br_call` | Planner identifies candidates; no native emitter |
 | Exclusive-instruction windows | `site_window`, `site_retry_window` | Planner identifies candidates; requires whole-window analysis |
