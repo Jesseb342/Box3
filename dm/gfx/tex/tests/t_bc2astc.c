@@ -214,7 +214,10 @@ static void test_bc7_soft_astc(void) {
         for (int j = 0; j < 16; j++) b[j] = (uint8_t)rnd32();
         int mode = i & 7;
         b[0] = (uint8_t)((b[0] & ~((1u << (mode + 1)) - 1u)) | (1u << mode));
-        bcdec_bc7(b, ref + i * 64, 16);
+        // Reference image is row-major, like astc_decode's output; place each
+        // decoded BC7 block at its 4x4 tile instead of concatenating blocks.
+        int bx = i % NBX, by = i / NBX;
+        bcdec_bc7(b, ref + (size_t)by * 4 * (NBX * 4 * 4) + (size_t)bx * 4 * 4, NBX * 4 * 4);
     }
     CHECK(bc_soft_decode(BC7, bc, NBX * 16, NBX * 4, NBY * 4, astc, NBX * 16) == 0,
           "BC7 software texture-to-ASTC decode failed");
