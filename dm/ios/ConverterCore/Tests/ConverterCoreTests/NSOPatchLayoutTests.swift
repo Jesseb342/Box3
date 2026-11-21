@@ -29,7 +29,7 @@ final class NSOPatchLayoutTests: XCTestCase {
 
     func testBigTextReducesFrontPlacement() throws {
         let layout = try NSOPatchLayout.make(
-            segments(text: 0x7000000, ro: 0x1000, data: 0x1000),
+            segments: segments(text: 0x7000000, ro: 0x1000, data: 0x1000),
             bssSize: 0x100000
         )
         XCTAssertTrue(layout.isFar)
@@ -40,7 +40,7 @@ final class NSOPatchLayoutTests: XCTestCase {
 
     func testHonorsExplicitFrontOverride() throws {
         let layout = try NSOPatchLayout.make(
-            segments(text: 0x1000, ro: 0x1000, data: 0x7000000),
+            segments: segments(text: 0x1000, ro: 0x1000, data: 0x7000000),
             bssSize: 0,
             frontOverride: 0x01000000
         )
