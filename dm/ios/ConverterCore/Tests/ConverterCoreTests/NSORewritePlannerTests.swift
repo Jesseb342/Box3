@@ -4,7 +4,7 @@ import XCTest
 final class NSORewritePlannerTests: XCTestCase {
     func testClassifiesSystemCallsAndSystemRegisterSites() throws {
         let instructions = [
-            decoded(0xD4000001, "svc", "#0x80"),
+            decoded(0xD4001001, "svc", "#0x80"),
             decoded(0xD53BD043, "mrs", "x3, tpidr_el0"),
             decoded(0xD51BD047, "msr", "tpidr_el0, x7"),
             decoded(0xD53BD061, "mrs", "x1, tpidrro_el0"),
