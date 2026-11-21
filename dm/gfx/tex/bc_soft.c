@@ -12,7 +12,7 @@
 #endif
 
 int nvn_bc_soft;
-int nvn_bc_astc = 1;   // BC1 / BC2 / BC3 / BC7 into ASTC 4x4 instead of RGBA8, BC6H unsigned into RG11B10F instead of RGBA16F (DM_BC_ASTC=0: the uncompressed formats)
+int nvn_bc_astc = 1;   // BC1 / BC2 / BC3 into ASTC 4x4 instead of RGBA8; BC7 remains RGBA8, BC6H unsigned into RG11B10F instead of RGBA16F (DM_BC_ASTC=0: the uncompressed formats)
 
 enum { BC1 = 130, BC1_S = 131, BC2 = 132, BC2_S = 133, BC3 = 134, BC3_S = 135, BC4_U = 140, BC4_S = 141, BC5_U = 142, BC5_S = 143, BC6H_S = 150, BC6H_U = 151, BC7 = 152, BC7_S = 153 };
 enum { R8U = 10, R8S = 12, RG8U = 30, RG8S = 32, RGBA8 = 70, RGBA8_S = 71, RG11B10F = 92, RGBA16F = 115, ASTC4_S = 186, ASTC4 = 204 };
@@ -23,7 +23,7 @@ uint32_t bc_soft_target(uint32_t pf, int *bpp) {
         // BC1–BC3 use compact ASTC when enabled; BC7 stays RGBA8 to preserve its multi-partition detail.
         // b = 4 makes the upload pitch 16 bytes per ASTC block or 4 RGBA bytes per pixel.
         case BC1: case BC2: case BC3: o = nvn_bc_astc ? ASTC4 : RGBA8; b = 4; break;
-        case BC1_S: case BC2: case BC3_S: o = nvn_bc_astc ? ASTC4_S : RGBA8_S; b = 4; break;
+        case BC1_S: case BC2_S: case BC3_S: o = nvn_bc_astc ? ASTC4_S : RGBA8_S; b = 4; break;
         case BC7: o = RGBA8; b = 4; break;
         case BC7_S: o = RGBA8_S; b = 4; break;
         case BC4_U: o = R8U; b = 1; break;
