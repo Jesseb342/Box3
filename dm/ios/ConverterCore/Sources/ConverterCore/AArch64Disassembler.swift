@@ -14,6 +14,17 @@ public struct DecodedAArch64Instruction: Equatable {
     public let operandString: String
     public let registersRead: Set<String>
     public let registersWritten: Set<String>
+    public let registersMentioned: Set<String>
+
+    public var allRegisters: Set<String> {
+        registersRead.union(registersWritten).union(registersMentioned)
+    }
+
+    public var mentionsX18: Bool {
+        registersMentioned.contains("x18") || registersMentioned.contains("w18") ||
+            registersRead.contains("x18") || registersWritten.contains("x18") ||
+            registersRead.contains("w18") || registersWritten.contains("w18")
+    }
 }
 
 /// Strict AArch64 little-endian disassembly adapter.
@@ -34,6 +45,15 @@ public final class AArch64Disassembler {
 
     private func registerName(_ registerID: UInt16) -> String? {
         engine.registerName(UInt32(registerID))
+    }
+
+    private static func registersMentioned(_ operands: String) -> Set<String> {
+        let expression = try! NSRegularExpression(pattern: #"\\b[wx](?:[0-9]|[12][0-9]|30)\\b"#)
+        let source = operands as NSString
+        let range = NSRange(location: 0, length: source.length)
+        return Set(expression.matches(in: operands, range: range).map {
+            source.substring(with: $0.range)
+        })
     }
 
     public func disassemble(_ code: Data, at address: UInt64 = 0) throws -> [DecodedAArch64Instruction] {
@@ -76,7 +96,8 @@ public final class AArch64Disassembler {
                 mnemonic: instruction.mnemonic,
                 operandString: instruction.operandString,
                 registersRead: Set(instruction.regsRead.compactMap(registerName)),
-                registersWritten: Set(instruction.regsWritten.compactMap(registerName))
+                registersWritten: Set(instruction.regsWritten.compactMap(registerName)),
+                registersMentioned: Self.registersMentioned(instruction.operandString)
             ))
             consumed += 4
         }
