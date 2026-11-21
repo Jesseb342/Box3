@@ -9,6 +9,12 @@ final class AArch64EncoderTests: XCTestCase {
         XCTAssertEqual(try AArch64Encoder.ldp(0, 1, base: 31, offset: 0), 0xA94007E0)
         XCTAssertEqual(try AArch64Encoder.mrsTPIDRRO(3), 0xD53BD063)
         XCTAssertEqual(try AArch64Encoder.branchRegister(16), 0xD61F0200)
+        XCTAssertEqual(try AArch64Encoder.branchLinkRegister(30), 0xD63F03C0)
+        XCTAssertEqual(try AArch64Encoder.stpPre(29, 30, base: 31, offset: -16), 0xA9BF7BFD)
+        XCTAssertEqual(try AArch64Encoder.ldpPost(29, 30, base: 31, offset: 16), 0xA8C17BFD)
+        XCTAssertEqual(try AArch64Encoder.ldrX(29, base: 31), 0xF94003FD)
+        XCTAssertEqual(try AArch64Encoder.ldrX(29, base: 29, immediate12: 3), 0xF9400FBD)
+        XCTAssertEqual(try AArch64Encoder.addRegister(30, source: 30, operand: 29), 0x8B1D03DE)
         XCTAssertEqual(AArch64Encoder.nop, 0xD503201F)
     }
 
