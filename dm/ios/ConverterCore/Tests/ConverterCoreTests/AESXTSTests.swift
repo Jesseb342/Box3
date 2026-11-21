@@ -46,7 +46,7 @@ final class AESXTSTests: XCTestCase {
             let digest = SHA256.hash(data: encrypted)
                 .map { String(format: "%02x", $0) }
                 .joined()
-            XCTAssertEqual(digest, vector.sha256, "sector \\(vector.sector)")
+            XCTAssertEqual(digest, vector.sha256, "sector \(vector.sector)")
             XCTAssertEqual(
                 try AESXTS.decrypt(dataUnit: encrypted, combinedKey: key, tweak: tweak),
                 plaintext
