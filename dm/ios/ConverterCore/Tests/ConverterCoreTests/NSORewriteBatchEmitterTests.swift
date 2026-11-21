@@ -283,7 +283,7 @@ final class NSORewriteBatchEmitterTests: XCTestCase {
         let patchInstructions = try decoder.disassemble(
             result.patchData, at: UInt64(layout.patchOffset)
         )
-        XCTAssertEqual(patchInstructions.map(\\.mnemonic),
+        XCTAssertEqual(patchInstructions.map(\.mnemonic),
                        ["stp", "mrs", "adrp", "ldr", "add", "adrp", "add", "str", "ldp", "b"])
 
         // Decode the emitted ADRP using the architectural immediate fields,
