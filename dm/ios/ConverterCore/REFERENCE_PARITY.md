@@ -4,6 +4,12 @@ This document tracks the native Swift implementation against `dm/tools/patch_nso
 The Python rewriter is the behavioral reference; a green Swift test suite is not proof of
 full parity or successful game conversion.
 
+## iOS app linkage
+
+The `ConverterCore` Swift package is linked as a local package dependency of the `DmIOS` target in `dm/ios/project.yml`. The generated per-game Xcode project and the synthetic CI smoke project both link the package directory, and the launcher imports the module so Xcode must resolve and compile it. This verifies app-target integration only: the launcher does not yet invoke an end-to-end NSP conversion workflow.
+
+The NSO input path now includes header validation, bounded LZ4 segment decompression, contiguous near/far image reconstruction, instruction planning, and batch emission for the supported rewrite subset. File-level NCA extraction, full rewrite parity, and runtime handoff remain separate work.
+
 ## Implemented in Swift and currently admitted by the batch emitter
 
 | Rewrite | Python reference | Swift status |
