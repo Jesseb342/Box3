@@ -13,12 +13,20 @@ public struct NSORewriteFixup: Equatable {
     public let key: String
 }
 
+public struct NSORewriteGate: Equatable {
+    public let returnAddress: Int64
+    public let kind: String
+    public let argument: UInt32
+    public let originalAddress: UInt64
+}
+
 public struct NSORewriteBlock: Equatable {
     public let siteAddress: UInt64
     public let kind: NSORewriteSiteKind
     public let words: [UInt32]
     public let fixups: [NSORewriteFixup]
     public let siteBranchWord: UInt32
+    public let gate: NSORewriteGate?
 
     public var data: Data {
         var output = Data()
@@ -109,7 +117,8 @@ public enum NSORewriteEmitter {
             kind: site.kind,
             words: words,
             fixups: fixups,
-            siteBranchWord: siteBranch
+            siteBranchWord: siteBranch,
+            gate: nil
         )
     }
 
@@ -196,6 +205,102 @@ public enum NSORewriteEmitter {
         )
     }
 
+    public static func emitHostGate(
+        _ site: NSORewriteSite,
+        patchAddress: Int64,
+        keyPageOffset: Int64
+    ) throws -> NSORewriteBlock {
+        let gateKind: String
+        let argument: UInt32
+        switch site.kind {
+        case .svc:
+            guard site.instructionWord & 0xFFE0001F == 0xD4000001 else {
+                throw NSORewriteEmissionError.siteInstructionMismatch
+            }
+            gateKind = "svc"
+            argument = (site.instructionWord >> 5) & 0xFFFF
+        case .counterPhysicalRead:
+            guard site.instructionWord & 0xFFFFFFE0 == 0xD53BE020 else {
+                throw NSORewriteEmissionError.siteInstructionMismatch
+            }
+            gateKind = "cntpct"
+            argument = site.instructionWord & 31
+        case .counterVirtualRead:
+            guard site.instructionWord & 0xFFFFFFE0 == 0xD53BE040 else {
+                throw NSORewriteEmissionError.siteInstructionMismatch
+            }
+            gateKind = "cntvct"
+            argument = site.instructionWord & 31
+        default:
+            throw NSORewriteEmissionError.unsupportedSite(site.kind)
+        }
+
+        var words: [UInt32] = []
+        let prologue = try AArch64Encoder.stpPre(29, 30, base: 31, offset: -16)
+        emitWord(prologue, into: &words)
+        emitWord(try AArch64Encoder.mrsTPIDRRO(30), into: &words)
+        let keyPC = try patchPC(patchAddress, wordCount: words.count)
+        let fixup = NSORewriteFixup(byteOffset: words.count * 4, key: "KGATE")
+        emitWord(try AArch64Encoder.adrp(29, pc: keyPC, target: keyPageOffset), into: &words)
+        emitWord(try AArch64Encoder.ldrX(29, base: 29, immediate12: 3), into: &words)
+        emitWord(try AArch64Encoder.addRegister(30, source: 30, operand: 29), into: &words)
+        emitWord(try AArch64Encoder.ldrX(30, base: 30), into: &words)
+        emitWord(try AArch64Encoder.ldrX(29, base: 31), into: &words)
+        emitWord(try AArch64Encoder.branchLinkRegister(30), into: &words)
+        let (returnAddress, overflow) = patchAddress.addingReportingOverflow(Int64(words.count) * 4)
+        guard !overflow else { throw NSORewriteEmissionError.addressOutOfRange }
+        emitWord(try AArch64Encoder.ldpPost(29, 30, base: 31, offset: 16), into: &words)
+        let branchAddress = try patchPC(patchAddress, wordCount: words.count)
+        let (resume, resumeOverflow) = Int64(site.address).addingReportingOverflow(4)
+        guard !resumeOverflow else { throw NSORewriteEmissionError.addressOutOfRange }
+        emitWord(try AArch64Encoder.b(from: branchAddress, to: resume), into: &words)
+
+        return NSORewriteBlock(
+            siteAddress: site.address,
+            kind: site.kind,
+            words: words,
+            fixups: [fixup],
+            siteBranchWord: try AArch64Encoder.b(from: Int64(site.address), to: patchAddress),
+            gate: NSORewriteGate(
+                returnAddress: returnAddress,
+                kind: gateKind,
+                argument: argument,
+                originalAddress: site.address
+            )
+        )
+    }
+
+    public static func emitStackAlignment(
+        _ site: NSORewriteSite,
+        patchAddress: Int64
+    ) throws -> NSORewriteBlock {
+        guard site.kind == .stackAlignment,
+              site.instructionWord & 0xFFE0FFFF == 0xCB2063FF else {
+            throw NSORewriteEmissionError.siteInstructionMismatch
+        }
+        let register = Int(site.argument ?? 32)
+        guard (0...30).contains(register), register != 18 else {
+            throw NSORewriteEmissionError.insufficientScratchRegisters
+        }
+        var words = [
+            try AArch64Encoder.addImmediate(register, source: register, immediate: 15),
+            0x927CEC00 | (UInt32(register) << 5) | UInt32(register),
+            site.instructionWord
+        ]
+        let branchAddress = try patchPC(patchAddress, wordCount: words.count)
+        let (resume, overflow) = Int64(site.address).addingReportingOverflow(4)
+        guard !overflow else { throw NSORewriteEmissionError.addressOutOfRange }
+        words.append(try AArch64Encoder.b(from: branchAddress, to: resume))
+        return NSORewriteBlock(
+            siteAddress: site.address,
+            kind: site.kind,
+            words: words,
+            fixups: [],
+            siteBranchWord: try AArch64Encoder.b(from: Int64(site.address), to: patchAddress),
+            gate: nil
+        )
+    }
+
     private static func finish(
         site: NSORewriteSite,
         kind: NSORewriteSiteKind,
@@ -209,7 +314,8 @@ public enum NSORewriteEmitter {
             kind: kind,
             words: words,
             fixups: fixups,
-            siteBranchWord: branch
+            siteBranchWord: branch,
+            gate: nil
         )
     }
 
