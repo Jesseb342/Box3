@@ -232,7 +232,7 @@ final class NSORewriteEmitterTests: XCTestCase {
             XCTAssertEqual(decoded[5].operandString,
                            String(format: "x0, 0x%llx", expectedTarget & ~UInt64(0xFFF)))
             XCTAssertEqual(decoded[6].operandString,
-                           String(format: "x0, x0, #%llu", expectedTarget & 0xFFF))
+                           String(format: "x0, x0, #0x%llx", expectedTarget & 0xFFF))
             XCTAssertEqual(decoded.last?.mnemonic, "b")
             XCTAssertEqual(decoded.last?.operandString,
                            String(format: "0x%llx", siteAddress + 4))
@@ -265,7 +265,7 @@ final class NSORewriteEmitterTests: XCTestCase {
             let decoded = try decoder.disassemble(block.data, at: UInt64(patchAddress))
             XCTAssertEqual(decoded[5].mnemonic, "adrp")
             XCTAssertEqual(decoded[5].operandString,
-                           String(format: "x0, 0x%llx", expectedTarget))
+                           (expectedTarget == 0 ? "x0, 0" : String(format: "x0, 0x%llx", expectedTarget)))
             XCTAssertEqual(decoded[6].mnemonic, "str")
             XCTAssertEqual(decoded[7].mnemonic, "ldp")
             XCTAssertEqual(decoded.last?.mnemonic, "b")
