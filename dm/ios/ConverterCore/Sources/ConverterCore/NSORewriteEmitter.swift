@@ -17,6 +17,7 @@ public struct NSORewriteBlock: Equatable {
     public let kind: NSORewriteSiteKind
     public let words: [UInt32]
     public let fixups: [NSORewriteFixup]
+    public let siteBranchWord: UInt32
 
     public var data: Data {
         var output = Data()
@@ -97,11 +98,16 @@ public enum NSORewriteEmitter {
         guard !returnOverflow else { throw NSORewriteEmissionError.addressOutOfRange }
         emit(try AArch64Encoder.b(from: branchAddress, to: returnAddress))
 
+        let siteBranch = try AArch64Encoder.b(
+            from: Int64(site.address),
+            to: patchAddress
+        )
         return NSORewriteBlock(
             siteAddress: site.address,
             kind: site.kind,
             words: words,
-            fixups: fixups
+            fixups: fixups,
+            siteBranchWord: siteBranch
         )
     }
 
