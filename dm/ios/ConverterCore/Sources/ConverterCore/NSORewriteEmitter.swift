@@ -213,9 +213,9 @@ public enum NSORewriteEmitter {
         words.append(rewritten)
         words.append(try AArch64Encoder.ldp(s, t, base: 31, offset: -16))
         let fallthroughBranchPC = try patchPC(patchAddress, wordCount: words.count)
-        let (fallthrough, overflow) = Int64(site.address).addingReportingOverflow(4)
+        let (fallthroughAddress, overflow) = Int64(site.address).addingReportingOverflow(4)
         guard !overflow else { throw NSORewriteEmissionError.addressOutOfRange }
-        words.append(try AArch64Encoder.b(from: fallthroughBranchPC, to: fallthrough))
+        words.append(try AArch64Encoder.b(from: fallthroughBranchPC, to: fallthroughAddress))
         words.append(try AArch64Encoder.ldp(s, t, base: 31, offset: -16))
         let takenBranchPC = try patchPC(patchAddress, wordCount: words.count)
         words.append(try AArch64Encoder.b(from: takenBranchPC, to: originalTarget))
