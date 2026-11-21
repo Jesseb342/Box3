@@ -37,7 +37,8 @@ public enum NSORewriteBatchEmitter {
         guard plan.undecodableAddresses.isEmpty else {
             throw NSORewriteBatchError.containsUndecodableInstructions(plan.undecodableAddresses)
         }
-        for site in plan.sites where site.kind != .x18Plain {
+        let supported: Set<NSORewriteSiteKind> = [.x18Plain, .tpidrRead, .tpidrroRead, .tpidrWrite]
+        for site in plan.sites where !supported.contains(site.kind) {
             throw NSORewriteBatchError.unsupportedSite(site.kind, site.address)
         }
 
@@ -66,12 +67,30 @@ public enum NSORewriteBatchEmitter {
                 base: layout.patchOffset,
                 byteCount: patch.count
             )
-            let block = try NSORewriteEmitter.emitPlainX18(
-                site,
-                patchAddress: patchAddress,
-                keyPageOffset: Int64(layout.keyPageOffset),
-                decoder: decoder
-            )
+            let block: NSORewriteBlock
+            switch site.kind {
+            case .x18Plain:
+                block = try NSORewriteEmitter.emitPlainX18(
+                    site,
+                    patchAddress: patchAddress,
+                    keyPageOffset: Int64(layout.keyPageOffset),
+                    decoder: decoder
+                )
+            case .tpidrRead, .tpidrroRead:
+                block = try NSORewriteEmitter.emitSystemRegisterRead(
+                    site,
+                    patchAddress: patchAddress,
+                    keyPageOffset: Int64(layout.keyPageOffset)
+                )
+            case .tpidrWrite:
+                block = try NSORewriteEmitter.emitSystemRegisterWrite(
+                    site,
+                    patchAddress: patchAddress,
+                    keyPageOffset: Int64(layout.keyPageOffset)
+                )
+            default:
+                throw NSORewriteBatchError.unsupportedSite(site.kind, site.address)
+            }
             for fixup in block.fixups {
                 fixups.append(NSORewriteFixup(
                     byteOffset: patch.count + fixup.byteOffset,
