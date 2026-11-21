@@ -5,14 +5,42 @@
 #include <signal.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <dlfcn.h>
+#include <mach-o/dyld.h>
+#include <string.h>
 #include "game_profile.h"   // game profile constants (the RomFS marker path)
 #include "front.h"
 
-int dm_main(int argc, char **argv);   // dm/host/main.c compiled in with -Dmain=dm_main
+int dm_main(int argc, char **argv);
+void dm_module_image_set(const struct mach_header *mh);   // dm/host/main.c compiled in with -Dmain=dm_main
 UIViewController *front_ios_root(void);
 void front_ios_focus_event(int ev);
 
 static char *g_argv[4]; static int g_argc;
+
+// Nusa packages the rewritten Switch modules in a separate Mach-O image.
+// Load it before dm_host_preload_start so the loader can find __dm* sections there.
+static void *g_external_modules_handle;
+static int load_external_game_modules(void) {
+    NSString *path = [[NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:@"Frameworks"] stringByAppendingPathComponent:@"GameModules.dylib"];
+    if (![NSFileManager.defaultManager fileExistsAtPath:path]) return 1; // Normal Box3 builds embed modules in the executable.
+    g_external_modules_handle = dlopen(path.fileSystemRepresentation, RTLD_NOW);
+    if (!g_external_modules_handle) {
+        const char *why = dlerror();
+        fprintf(stderr, "[RED] boot: dlopen(%s) failed: %s\\n", path.fileSystemRepresentation, why ? why : "unknown");
+        return 0;
+    }
+    for (uint32_t i = _dyld_image_count(); i > 0; i--) {
+        const char *name = _dyld_get_image_name(i - 1);
+        if (name && strstr(name, "GameModules.dylib")) {
+            dm_module_image_set(_dyld_get_image_header(i - 1));
+            fprintf(stderr, "boot: loaded external game modules from %s\\n", name);
+            return 1;
+        }
+    }
+    fprintf(stderr, "[RED] boot: GameModules.dylib loaded but its dyld image was not found\\n");
+    return 0;
+}
 
 static NSString *romfs_locate(void) {
     NSFileManager *fm = NSFileManager.defaultManager;
@@ -71,7 +99,7 @@ static int boot_env(void) {
     if ([fm fileExistsAtPath:pso]) setenv("DM_PSO_BUNDLE", pso.fileSystemRepresentation, 0);
     chdir(doc.fileSystemRepresentation);
     g_argv[0] = strdup("dmhost"); g_argv[1] = strdup(dm.fileSystemRepresentation); g_argc = 2;
-    dm_host_preload_start(g_argc, g_argv);   // Module tables / relocation / takeover run early in the background, in parallel with UIKit startup (and the launcher: the settings it sets are read when the game starts)
+    if (!load_external_game_modules()) return 0;\n    dm_host_preload_start(g_argc, g_argv);   // Module tables / relocation / takeover run early in the background, in parallel with UIKit startup (and the launcher: the settings it sets are read when the game starts)
     return 1;
 }
 static int g_boot_ok;
