@@ -61,6 +61,29 @@ public final class AArch64Disassembler {
         })
     }
 
+    private func registerAccess(_ instruction: Instruction) -> (reads: Set<String>, writes: Set<String>) {
+        var reads = Set(instruction.regsRead.compactMap(registerName).map { $0.lowercased() })
+        var writes = Set(instruction.regsWritten.compactMap(registerName).map { $0.lowercased() })
+        for operand in instruction.aarch64?.operands ?? [] {
+            let access = Int(operand.access.rawValue)
+            if operand.type.rawValue == 1 {
+                let name = registerName(UInt16(truncatingIfNeeded: operand.reg.rawValue))?.lowercased()
+                if let name {
+                    if access & 1 != 0 { reads.insert(name) }
+                    if access & 2 != 0 { writes.insert(name) }
+                }
+            } else if operand.type.rawValue == 3 {
+                for raw in [operand.mem.base.rawValue, operand.mem.index.rawValue] {
+                    let id = UInt16(truncatingIfNeeded: raw)
+                    if id != 0, let name = registerName(id)?.lowercased() {
+                        reads.insert(name)
+                    }
+                }
+            }
+        }
+        return (reads, writes)
+    }
+
     /// Decodes one word at a time and records invalid/trap words instead of
     /// stopping the scan. This matches the desktop rewriter's recovery policy
     /// for functions containing embedded trap instructions.
@@ -93,8 +116,8 @@ public final class AArch64Disassembler {
                 word: rawWord,
                 mnemonic: instruction.mnemonic.lowercased(),
                 operandString: instruction.operandString.lowercased(),
-                registersRead: Set(instruction.regsRead.compactMap(registerName)),
-                registersWritten: Set(instruction.regsWritten.compactMap(registerName)),
+                registersRead: registerAccess(instruction).reads,
+                registersWritten: registerAccess(instruction).writes,
                 registersMentioned: Self.registersMentioned(instruction.operandString)
             ))
         }
@@ -143,8 +166,8 @@ public final class AArch64Disassembler {
                 word: word,
                 mnemonic: instruction.mnemonic.lowercased(),
                 operandString: instruction.operandString.lowercased(),
-                registersRead: Set(instruction.regsRead.compactMap(registerName)),
-                registersWritten: Set(instruction.regsWritten.compactMap(registerName)),
+                registersRead: registerAccess(instruction).reads,
+                registersWritten: registerAccess(instruction).writes,
                 registersMentioned: Self.registersMentioned(instruction.operandString)
             ))
             consumed += 4
