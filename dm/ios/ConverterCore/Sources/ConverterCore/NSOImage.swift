@@ -89,7 +89,7 @@ public struct NSOImage: Equatable {
             }
         }
 
-        let buildID = data.subdata(in: 0x40..<0x60)
+        let buildID = data.subdata(in: 0x40..<0x50)
         guard buildID.contains(where: { $0 != 0 }) else { throw NSOError.invalidBuildID }
 
         self.version = version
