@@ -73,7 +73,7 @@ public enum AESXTS {
         let half = combinedKey.count / 2
         let dataKey = combinedKey.prefix(half)
         let tweakKey = combinedKey.suffix(half)
-        var mask = try aesBlock(tweak, key: Data(tweakKey), encrypting: true)
+        var mask = Array(try aesBlock(tweak, key: Data(tweakKey), encrypting: true))
         let input = Array(dataUnit)
         var output = [UInt8](repeating: 0, count: input.count)
 
