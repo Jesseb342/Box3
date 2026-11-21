@@ -78,6 +78,7 @@ Keep the app modular. UI code must orchestrate native conversion services and di
    - Parse tickets, key sets, NCA headers/sections, and content metadata.
    - The raw NCA header (0xC00 bytes) is AES-XTS encrypted as six 0x200-byte data units. The XTS data-unit number is encoded using Nintendo's big-endian tweak convention (distinct from IEEE 1619's little-endian sequence-number representation). The new `AESXTS` implementation uses CommonCrypto's AES-ECB primitive and implements the XTS transform in Swift; `NCAHeader` continues to parse plaintext only.
    - The implementation is covered by an IEEE 1619 known-answer vector and a Nintendo sector-tweak layout test. It still needs comparison against hactool/LibHac output from a legally owned NCA fixture before it is treated as validated NCA decryption.
+   - A local-only reference checker is available as the `nca-header-reference-check` Swift package executable. Supply the first 0xC00 bytes of a legally owned encrypted NCA, a 0xC00-byte plaintext header independently emitted by hactool/LibHac, and set `NCA_HEADER_KEY_HEX` in the local environment. It reports the first differing byte and never prints the key. No fixture, key, or game dump is stored in the repository or sent to CI.
    - Then implement NCA key-area decryption, title-key/ticket handling, AES-CTR/AES-CTR-Ex section reads, integrity verification, and BKTR update overlays. These are separate crypto/storage layers, not one generic decrypt operation.
    - Decrypt and verify NCA content; layer the selected update over the base program; extract DLC independently.
    - Preserve control metadata (NACP, icon, version, title ID) for the generated app.
@@ -154,4 +155,4 @@ Keep the app modular. UI code must orchestrate native conversion services and di
 
 ## Immediate next engineering task
 
-Continue Gate B with independent NCA crypto layers: validate the new AES-XTS implementation against the IEEE vector, compare decrypted header bytes with hactool/LibHac on a legally owned fixture, then add NCA key-area and title-key handling. Do not proceed to CTR sections until the header and key derivation stages have byte-for-byte reference tests.
+Continue Gate B with independent NCA crypto layers: run the local reference checker against hactool/LibHac output from a legally owned fixture, resolve any byte mismatch, then add NCA key-area and title-key handling with independent reference tests. Do not proceed to CTR sections until the header and key derivation stages have byte-for-byte reference tests.
