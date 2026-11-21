@@ -61,7 +61,8 @@ public struct NSOImage: Equatable {
             guard memorySize > 0, actualStoredSize > 0 else {
                 throw NSOError.invalidSegmentRange(index)
             }
-            guard fileOffset >= 0x70,\n                  UInt64(fileOffset) + UInt64(actualStoredSize) <= UInt64(data.count) else {
+            guard fileOffset >= 0x70,
+                  UInt64(fileOffset) + UInt64(actualStoredSize) <= UInt64(data.count) else {
                 throw NSOError.segmentOutsideFile(index)
             }
             if compressed && storedSize == 0 {
