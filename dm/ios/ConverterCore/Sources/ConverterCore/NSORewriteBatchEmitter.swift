@@ -3,6 +3,7 @@ import Foundation
 public enum NSORewriteBatchError: Error, Equatable {
     case baseImageSizeMismatch(expected: UInt64, actual: Int)
     case unsupportedSite(NSORewriteSiteKind, UInt64)
+    case containsUndecodableInstructions([UInt64])
     case siteOutsideImage(UInt64)
     case originalInstructionMismatch(UInt64, expected: UInt32, actual: UInt32)
     case patchAreaDoesNotFit(required: UInt64, available: UInt64)
@@ -32,6 +33,9 @@ public enum NSORewriteBatchEmitter {
                 expected: layout.fileImageLength,
                 actual: baseImage.count
             )
+        }
+        guard plan.undecodableAddresses.isEmpty else {
+            throw NSORewriteBatchError.containsUndecodableInstructions(plan.undecodableAddresses)
         }
         for site in plan.sites where site.kind != .x18Plain {
             throw NSORewriteBatchError.unsupportedSite(site.kind, site.address)
