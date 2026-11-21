@@ -312,11 +312,16 @@ public enum NSORewriteEmitter {
         fixups: [NSORewriteFixup],
         patchAddress: Int64
     ) throws -> NSORewriteBlock {
+        let (resumeAddress, resumeOverflow) = Int64(site.address).addingReportingOverflow(4)
+        guard !resumeOverflow else { throw NSORewriteEmissionError.addressOutOfRange }
+        let branchAddress = try patchPC(patchAddress, wordCount: words.count)
+        var completedWords = words
+        completedWords.append(try AArch64Encoder.b(from: branchAddress, to: resumeAddress))
         let branch = try AArch64Encoder.b(from: Int64(site.address), to: patchAddress)
         return NSORewriteBlock(
             siteAddress: site.address,
             kind: kind,
-            words: words,
+            words: completedWords,
             fixups: fixups,
             siteBranchWord: branch,
             gate: nil
