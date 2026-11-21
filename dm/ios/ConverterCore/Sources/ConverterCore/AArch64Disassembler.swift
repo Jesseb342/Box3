@@ -48,7 +48,7 @@ public final class AArch64Disassembler {
     }
 
     private static func registersMentioned(_ operands: String) -> Set<String> {
-        let expression = try! NSRegularExpression(pattern: #"\\b[wx](?:[0-9]|[12][0-9]|30)\\b"#)
+        let expression = try! NSRegularExpression(pattern: #"\b[wx](?:[0-9]|[12][0-9]|30)\b"#)
         let source = operands as NSString
         let range = NSRange(location: 0, length: source.length)
         return Set(expression.matches(in: operands, range: range).map {
