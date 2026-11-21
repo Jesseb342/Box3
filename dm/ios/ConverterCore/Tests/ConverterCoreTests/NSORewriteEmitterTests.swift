@@ -163,7 +163,7 @@ final class NSORewriteEmitterTests: XCTestCase {
         )
         let decoded = try decoder.disassemble(block.data, at: 0x4000)
         XCTAssertEqual(decoded[5].mnemonic, "adrp")
-        XCTAssertEqual(decoded[5].operandString, "x0, #0x2000")
+        XCTAssertEqual(decoded[5].operandString, "x0, 0x2000")
         XCTAssertEqual(decoded[6].operandString, "x0, x0, #4")
     }
 
@@ -186,7 +186,7 @@ final class NSORewriteEmitterTests: XCTestCase {
         )
         let decoded = try decoder.disassemble(block.data, at: 0x5000)
         XCTAssertEqual(decoded[5].mnemonic, "adrp")
-        XCTAssertEqual(decoded[5].operandString, "x0, #0x1000")
+        XCTAssertEqual(decoded[5].operandString, "x0, 0x1000")
         XCTAssertEqual(decoded[6].mnemonic, "str")
         XCTAssertEqual(decoded[7].mnemonic, "ldp")
     }
