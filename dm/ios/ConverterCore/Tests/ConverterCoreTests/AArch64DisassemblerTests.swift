@@ -26,6 +26,8 @@ final class AArch64DisassemblerTests: XCTestCase {
         let writes = instruction.registersWritten
         XCTAssertTrue(reads.contains("x18"))
         XCTAssertTrue(writes.contains("x0"))
+        XCTAssertTrue(instruction.mentionsX18)
+        XCTAssertTrue(instruction.allRegisters.contains("x18"))
     }
 
     func testRejectsPartialInstruction() throws {
