@@ -19,6 +19,11 @@ public struct ProdKeys {
         values.keys.sorted()
     }
 
+    public init(contentsOf url: URL) throws {
+        let text = try String(contentsOf: url, encoding: .utf8)
+        try self.init(text: text)
+    }
+
     public init(text: String) throws {
         var parsed: [String: Data] = [:]
 
