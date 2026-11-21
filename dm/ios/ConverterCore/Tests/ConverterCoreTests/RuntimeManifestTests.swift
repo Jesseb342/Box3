@@ -1,5 +1,6 @@
 import Foundation
 import XCTest
+import CryptoKit
 @testable import ConverterCore
 
 final class RuntimeManifestTests: XCTestCase {
