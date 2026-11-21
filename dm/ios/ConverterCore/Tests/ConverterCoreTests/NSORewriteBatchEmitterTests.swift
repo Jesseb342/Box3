@@ -15,7 +15,7 @@ final class NSORewriteBatchEmitterTests: XCTestCase {
         )
         let layout = try NSOPatchLayout.make(
             segments: [
-                segment(0, 0x1000, 0x1000),
+                segment(0, 0, 0x2000),
                 segment(1, 0x2000, 0x1000),
                 segment(2, 0x3000, 0x1000)
             ],
@@ -70,7 +70,7 @@ final class NSORewriteBatchEmitterTests: XCTestCase {
         )
         let layout = try NSOPatchLayout.make(
             segments: [
-                segment(0, 0x1000, 0x1000),
+                segment(0, 0, 0x2000),
                 segment(1, 0x2000, 0x1000),
                 segment(2, 0x3000, 0x1000)
             ],
@@ -98,7 +98,7 @@ final class NSORewriteBatchEmitterTests: XCTestCase {
         )
         let layout = try NSOPatchLayout.make(
             segments: [
-                segment(0, 0x1000, 0x1000),
+                segment(0, 0, 0x2000),
                 segment(1, 0x2000, 0x1000),
                 segment(2, 0x3000, 0x1000)
             ],
