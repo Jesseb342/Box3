@@ -112,8 +112,6 @@ final class NCAIVFCSuperblockTests: XCTestCase {
     }
 
     private func makeFixture(blockExponents: [UInt32] = [6, 6, 6, 6, 6, 6]) throws -> Fixture {
-        let offsets: [UInt64] = [0x100, 0x200, 0x300, 0x400, 0x500, 0x600]
-        let sizes: [UInt64] = [0x20, 0x20, 0x20, 0x20, 0x40, 0x50]
         guard blockExponents.count == 6 else { throw NSError(domain: "IVFC fixture", code: 1) }
         let offsets: [UInt64] = [0x100, 0x200, 0x300, 0x400, 0x500, 0x600]
         var section = Data(repeating: 0, count: 0x800)
