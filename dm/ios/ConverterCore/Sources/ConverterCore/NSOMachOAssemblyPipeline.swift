@@ -23,6 +23,7 @@ public enum NSOMachOAssemblyPipelineError: Error, LocalizedError, Equatable {
         case .duplicateModuleName(let name): return "The module list contains a duplicate: \(name)."
         case .missingPatchedModule(let name): return "Missing \(name).patched.bin."
         case .missingFixups(let name): return "Missing \(name).fixups.tsv."
+        case .missingGates(let name): return "Missing \\(name).gates.tsv; the iBuilder runtime requires its gate table."
         }
     }
 }
