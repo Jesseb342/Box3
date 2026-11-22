@@ -1,4 +1,3 @@
-#if os(iOS)
 import Foundation
 import Box3NSOBridge
 
@@ -70,4 +69,3 @@ public enum RustNSOLoader {
         )
     }
 }
-#endif
