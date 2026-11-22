@@ -43,16 +43,15 @@ final class NCASectionKeyResolverTests: XCTestCase {
         }
     }
 
-    func testRejectsTitleKeyCryptoUntilTitleKeyPathExists() throws {
+    func testRejectsTitleKeyCryptoInStandardKeyAreaPath() throws {
         var bytes = makePlainHeader(oldGeneration: 0, newGeneration: 0, area: 0, encrypted: Data(repeating: 0, count: 0x40))
-        bytes[0x230] = 1
+        bytes.replaceSubrange(0x230..<0x240, with: Data(repeating: 1, count: 16))
         let header = try NCAHeader(plaintextHeader: bytes)
         let keys = try ProdKeys(text: "key_area_key_application_00=\(hex(Data(repeating: 0, count: 16)))")
         XCTAssertThrowsError(try NCASectionKeyResolver.decryptKeyArea(header: header, keys: keys)) {
             XCTAssertEqual($0 as? NCASectionKeyResolverError, .titleKeyCryptoRequiresTitleKeySupport)
         }
     }
-
 
     func testDecryptsRightsIDTitleKeyWithMatchingTitleKekGeneration() throws {
         let titleKek = Data(repeating: 0x6D, count: 16)
@@ -62,8 +61,8 @@ final class NCASectionKeyResolverTests: XCTestCase {
         var bytes = makePlainHeader(oldGeneration: 1, newGeneration: 3, area: 0, encrypted: Data(repeating: 0, count: 0x40))
         bytes.replaceSubrange(0x230..<0x240, with: rightsID)
         let header = try NCAHeader(plaintextHeader: bytes)
-        let keys = try ProdKeys(text: "titlekek_02=\\(hex(titleKek))")
-        let titleKeys = try TitleKeys(text: "\\(hex(rightsID))=\\(hex(encryptedTitleKey))")
+        let keys = try ProdKeys(text: "titlekek_02=\(hex(titleKek))")
+        let titleKeys = try TitleKeys(text: "\(hex(rightsID))=\(hex(encryptedTitleKey))")
 
         XCTAssertEqual(try NCASectionKeyResolver.titleKey(header: header, keys: keys, titleKeys: titleKeys), clearTitleKey)
         XCTAssertEqual(try NCASectionKeyResolver.sectionCTRKey(header: header, keys: keys, titleKeys: titleKeys), clearTitleKey)
@@ -77,8 +76,8 @@ final class NCASectionKeyResolverTests: XCTestCase {
         var bytes = makePlainHeader(oldGeneration: 0, newGeneration: 0, area: 0, encrypted: Data(repeating: 0, count: 0x40))
         bytes.replaceSubrange(0x230..<0x240, with: rightsID)
         let header = try NCAHeader(plaintextHeader: bytes)
-        let keys = try ProdKeys(text: "ticket_commonkey_00=\\(hex(titleKek))")
-        let titleKeys = try TitleKeys(text: "\\(hex(rightsID))=\\(hex(encryptedTitleKey))")
+        let keys = try ProdKeys(text: "ticket_commonkey_00=\(hex(titleKek))")
+        let titleKeys = try TitleKeys(text: "\(hex(rightsID))=\(hex(encryptedTitleKey))")
         XCTAssertEqual(try NCASectionKeyResolver.titleKey(header: header, keys: keys, titleKeys: titleKeys), clearTitleKey)
     }
 
@@ -87,17 +86,18 @@ final class NCASectionKeyResolverTests: XCTestCase {
         var bytes = makePlainHeader(oldGeneration: 0, newGeneration: 0, area: 0, encrypted: Data(repeating: 0, count: 0x40))
         bytes.replaceSubrange(0x230..<0x240, with: rightsID)
         let header = try NCAHeader(plaintextHeader: bytes)
-        let keys = try ProdKeys(text: "header_key=\\(hex(Data(repeating: 0, count: 32)))")
+        let keys = try ProdKeys(text: "header_key=\(hex(Data(repeating: 0, count: 32)))")
         let emptyTitles = try TitleKeys(text: "010003000e1468000000000000000008=00112233445566778899aabbccddeeff")
         XCTAssertThrowsError(try NCASectionKeyResolver.titleKey(header: header, keys: keys, titleKeys: emptyTitles)) {
             XCTAssertEqual($0 as? NCASectionKeyResolverError, .missingTitleKey(hex(rightsID)))
         }
-        let titles = try TitleKeys(text: "\\(hex(rightsID))=00112233445566778899aabbccddeeff")
+        let titles = try TitleKeys(text: "\(hex(rightsID))=00112233445566778899aabbccddeeff")
         XCTAssertThrowsError(try NCASectionKeyResolver.titleKey(header: header, keys: keys, titleKeys: titles)) {
             XCTAssertEqual($0 as? NCASectionKeyResolverError, .missingTitleKek("titlekek_00"))
         }
     }
-\n    private func makeHeader(oldGeneration: UInt8, newGeneration: UInt8, area: UInt8, encrypted: Data) throws -> NCAHeader {
+
+    private func makeHeader(oldGeneration: UInt8, newGeneration: UInt8, area: UInt8, encrypted: Data) throws -> NCAHeader {
         try NCAHeader(plaintextHeader: makePlainHeader(oldGeneration: oldGeneration, newGeneration: newGeneration, area: area, encrypted: encrypted))
     }
 
