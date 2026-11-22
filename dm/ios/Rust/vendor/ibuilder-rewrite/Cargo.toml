@@ -4,6 +4,10 @@ edition.workspace = true
 version.workspace = true
 license.workspace = true
 
+[features]
+# Enables the upstream 80+ case Python-oracle suite; its NSO fixture corpus is intentionally not vendored in Box3.
+oracle-tests = []
+
 [dependencies]
 ibuilder-nso = { path = "../ibuilder-nso" }
 ibuilder-a64 = { path = "../ibuilder-a64" }

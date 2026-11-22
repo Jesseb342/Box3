@@ -23,7 +23,7 @@ mod totk;
 mod ttyd;
 mod xenox;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "oracle-tests"))]
 mod difftest;
 
 /// What one game's patch file registers as code, ported
