@@ -84,7 +84,9 @@ final class RustNSOLoaderTests: XCTestCase {
         image.replaceSubrange(0x300..<0x304, with: Data([1, 3, 3, 3]))
         put32(0, into: &image, at: 0x304)
         put32(0, into: &image, at: 0x308)
-        image.replaceSubrange(0x800..<0x810, with: Data(repeating: 0, count: 0x10))
+        image.replaceSubrange(0x900..<0x910, with: Data(repeating: 0, count: 0x10))
+        let textDigest = Data(SHA256.hash(data: image.subdata(in: 0x100..<0x1100)))
+        image.replaceSubrange(0xa0..<0xc0, with: textDigest)
         return image
     }
 
