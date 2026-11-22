@@ -145,6 +145,16 @@ public enum NSPExecutableRewritePipeline {
             throw error
         }
     }
+
+    static func rebased(_ url: URL, from staging: URL, to output: URL) throws -> URL {
+        let source = staging.standardizedFileURL.path
+        let candidate = url.standardizedFileURL.path
+        let prefix = source.hasSuffix("/") ? source : source + "/"
+        guard candidate.hasPrefix(prefix) else {
+            throw NSPExecutableRewritePipelineError.invalidStagingPath
+        }
+        return output.appendingPathComponent(String(candidate.dropFirst(prefix.count)))
+    }
 }
 
 private struct NSPManifestEntry: Codable {
