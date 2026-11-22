@@ -140,7 +140,19 @@ struct ConverterView: View {
                     isRunning = false
                     outputPath = result.outputDirectory.path
                     let modules = result.packages.reduce(0) { $0 + $1.moduleSets.reduce(0) { $0 + $1.modules.count } }
-                    status = "Completed. \(result.packages.count) package(s), \(result.packages.reduce(0) { $0 + $1.ncaCount }) NCA file(s), \(modules) rewritten module(s)."
+                    let romFSImages = result.packages.reduce(0) { $0 + $1.romFSImages.count }
+                    let romFSBytes = result.packages.reduce(UInt64(0)) { total, package in
+                        total + package.romFSImages.reduce(UInt64(0)) { $0 + $1.imageSize }
+                    }
+                    let romFSMegabytes = Double(romFSBytes) / 1_048_576
+                    status = String(
+                        format: "Completed. %d package(s), %d NCA file(s), %d rewritten module(s), %d verified RomFS image(s) (%.1f MB).",
+                        result.packages.count,
+                        result.packages.reduce(0) { $0 + $1.ncaCount },
+                        modules,
+                        romFSImages,
+                        romFSMegabytes
+                    )
                 }
             } catch {
                 DispatchQueue.main.async {
