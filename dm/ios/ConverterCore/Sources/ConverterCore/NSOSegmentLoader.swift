@@ -14,6 +14,28 @@ public extension NSOImage {
         guard UInt64(file.count) == fileSize else {
             throw NSOError.segmentOutsideFile(0)
         }
+#if os(iOS)
+        // The Rust loader is the production path on-device: it validates the full NSO header,
+        // verifies enabled segment hashes, and handles both LZ4 and Switch 2 ZBIC compression.
+        let module = try RustNSOLoader.load(file)
+        guard module.bssSize == bssSize,
+              module.buildID.prefix(16) == buildID,
+              module.segments.count == segments.count else {
+            throw NSOError.invalidSegmentRange(0)
+        }
+        return try module.segments.enumerated().map { index, segment in
+            let start = UInt64(segment.offset)
+            let (end, overflow) = start.addingReportingOverflow(UInt64(segment.size))
+            guard !overflow, end <= UInt64(module.image.count) else {
+                throw NSOSegmentError.segmentOutsideImage(
+                    segment: index,
+                    end: end,
+                    imageSize: UInt64(module.image.count)
+                )
+            }
+            return module.image.subdata(in: Int(start)..<Int(end))
+        }
+#else
         return try segments.map { segment in
             let start = Int(segment.fileOffset)
             let end = start + Int(segment.storedSize)
@@ -35,6 +57,7 @@ public extension NSOImage {
             }
             return stored
         }
+#endif
     }
 }
 
