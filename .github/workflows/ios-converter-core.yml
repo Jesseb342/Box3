@@ -1,31 +1,21 @@
 name: iOS converter core tests
-
 on:
   push:
     branches: [ios-on-device-converter]
-    paths:
-      - "dm/ios/ConverterCore/**"
-      - "dm/ios/Rust/**"
-      - ".github/workflows/ios-converter-core.yml"
+    paths: ["dm/ios/ConverterCore/**", "dm/ios/Rust/**", ".github/workflows/ios-converter-core.yml"]
   pull_request:
     branches: [ios-on-device-converter]
-    paths:
-      - "dm/ios/ConverterCore/**"
-      - "dm/ios/Rust/**"
-      - ".github/workflows/ios-converter-core.yml"
+    paths: ["dm/ios/ConverterCore/**", "dm/ios/Rust/**", ".github/workflows/ios-converter-core.yml"]
   workflow_dispatch:
-
 permissions:
   contents: read
-
 concurrency:
   group: ios-converter-core-${{ github.ref }}
   cancel-in-progress: true
-
 jobs:
   swift-tests:
     runs-on: macos-26
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -34,13 +24,16 @@ jobs:
         run: |
           rustc --version
           cargo --version
-      - name: Test vendored NSO loader and C ABI bridge
+      - name: Test vendored NSO loader and rewriter
         run: cargo test --manifest-path dm/ios/Rust/Cargo.toml --workspace
-      - name: Build NSO bridge static library for macOS host
-        run: cargo build --manifest-path dm/ios/Rust/Cargo.toml --release -p box3-nso-bridge
-      - name: Build NSO bridge for physical iOS devices
+      - name: Build Rust static libraries for macOS host
+        run: |
+          cargo build --manifest-path dm/ios/Rust/Cargo.toml --release -p box3-nso-bridge
+          cargo build --manifest-path dm/ios/Rust/Cargo.toml --release -p box3-rewrite-bridge
+      - name: Build Rust static libraries for physical iOS devices
         run: |
           rustup target add aarch64-apple-ios
           cargo build --manifest-path dm/ios/Rust/Cargo.toml --release --target aarch64-apple-ios -p box3-nso-bridge
+          cargo build --manifest-path dm/ios/Rust/Cargo.toml --release --target aarch64-apple-ios -p box3-rewrite-bridge
       - name: Run native converter core tests
         run: swift test --package-path dm/ios/ConverterCore

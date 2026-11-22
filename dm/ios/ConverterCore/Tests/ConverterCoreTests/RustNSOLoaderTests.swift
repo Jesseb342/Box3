@@ -24,6 +24,10 @@ final class RustNSOLoaderTests: XCTestCase {
         }
     }
 
+    func testRustRewriteBridgeRejectsMalformedNSO() {
+        XCTAssertThrowsError(try RustNSORewriter.rewrite(Data("not an NSO".utf8), moduleName: "main"))
+    }
+
     func testRustBridgeRejectsSegmentHashMismatch() throws {
         var fixture = makeNSO()
         fixture[0x100] ^= 0x80
