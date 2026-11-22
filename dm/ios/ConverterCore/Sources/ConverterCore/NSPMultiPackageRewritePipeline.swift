@@ -29,6 +29,7 @@ public struct NSPPackageRewriteSummary {
     public let role: NSPPackageRole
     public let ncaCount: Int
     public let moduleSets: [NSPExecutableRewriteModuleSet]
+    public let romFSImages: [NSPRomFSImageSummary]
 }
 
 public struct NSPMultiPackageRewriteResult {
@@ -93,7 +94,8 @@ public enum NSPMultiPackageRewritePipeline {
                 summaries.append(NSPPackageRewriteSummary(
                     role: input.role,
                     ncaCount: result.ncaCount,
-                    moduleSets: result.moduleSets
+                    moduleSets: result.moduleSets,
+                    romFSImages: result.romFSImages
                 ))
             }
 
@@ -113,6 +115,17 @@ public enum NSPMultiPackageRewritePipeline {
                                 verifiedPFS0Blocks: $0.verifiedPFS0Blocks,
                                 extractedEntryCount: $0.extractedEntryCount,
                                 modules: $0.modules
+                            )
+                        },
+                        romFSImages: $0.romFSImages.map {
+                            NSPPackageRomFSManifest(
+                                ncaFileName: $0.ncaFileName,
+                                titleID: $0.titleID,
+                                sectionIndex: $0.sectionIndex,
+                                relativePath: $0.relativePath,
+                                imageSize: $0.imageSize,
+                                verifiedBlockCount: $0.verifiedBlockCount,
+                                entryCount: $0.entryCount
                             )
                         }
                     )
@@ -135,6 +148,20 @@ public enum NSPMultiPackageRewritePipeline {
                             rewrittenModulesDirectory: try NSPExecutableRewritePipeline.rebased(
                                 moduleSet.rewrittenModulesDirectory, from: staging, to: outputDirectory
                             )
+                        )
+                    },
+                    romFSImages: try summary.romFSImages.map { image in
+                        NSPRomFSImageSummary(
+                            ncaFileName: image.ncaFileName,
+                            titleID: image.titleID,
+                            sectionIndex: image.sectionIndex,
+                            imageURL: try NSPExecutableRewritePipeline.rebased(
+                                image.imageURL, from: staging, to: outputDirectory
+                            ),
+                            relativePath: image.relativePath,
+                            imageSize: image.imageSize,
+                            verifiedBlockCount: image.verifiedBlockCount,
+                            entryCount: image.entryCount
                         )
                     }
                 )
@@ -181,6 +208,7 @@ private struct NSPPackageManifestEntry: Codable {
     let role: NSPPackageRole
     let ncaCount: Int
     let moduleSets: [NSPModuleSetManifest]
+    let romFSImages: [NSPPackageRomFSManifest]
 }
 
 private struct NSPModuleSetManifest: Codable {
@@ -190,6 +218,16 @@ private struct NSPModuleSetManifest: Codable {
     let verifiedPFS0Blocks: UInt64
     let extractedEntryCount: Int
     let modules: [NSORewriteBatchModuleSummary]
+}
+
+private struct NSPPackageRomFSManifest: Codable {
+    let ncaFileName: String
+    let titleID: String
+    let sectionIndex: Int
+    let relativePath: String
+    let imageSize: UInt64
+    let verifiedBlockCount: UInt64
+    let entryCount: Int
 }
 
 private extension JSONEncoder {
