@@ -32,6 +32,22 @@ final class RustNSOLoaderTests: XCTestCase {
         XCTAssertTrue(rewritten.fixups.contains("# KEY_PAGE_SIZE\t0x4000"))
     }
 
+
+    func testExtractedExeFSBatchRewritesMainAndWritesReports() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let exefs = root.appendingPathComponent("exefs", isDirectory: true)
+        let output = root.appendingPathComponent("rewritten", isDirectory: true)
+        try FileManager.default.createDirectory(at: exefs, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try makeNSO().write(to: exefs.appendingPathComponent("main"))
+        try Data("icon".utf8).write(to: exefs.appendingPathComponent("icon"))
+        let result = try NSORewriteBatchProcessor.process(exefsDirectory: exefs, outputDirectory: output)
+        XCTAssertEqual(result.modules.map(\.moduleName), ["main"])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: output.appendingPathComponent("modules/main.patched.bin").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: output.appendingPathComponent("reports/main.fixups.tsv").path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: output.appendingPathComponent("manifest.json").path))
+    }
+
     func testRustRewriteBridgeRejectsMalformedNSO() {
         XCTAssertThrowsError(try RustNSORewriter.rewrite(Data("not an NSO".utf8), moduleName: "main"))
     }

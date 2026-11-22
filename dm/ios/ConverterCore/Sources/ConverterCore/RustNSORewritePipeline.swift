@@ -19,10 +19,11 @@ public enum RustNSORewritePipeline {
     public static func process(
         file: Data,
         moduleName: String,
-        gameProfile: String? = nil
+        gameProfile: String? = nil,
+        gamesDirectory: URL? = nil
     ) throws -> RustNSORewritePipelineResult {
         let module = try NSOImage(data: file)
-        let rewrite = try RustNSORewriter.rewrite(file, moduleName: moduleName, gameProfile: gameProfile)
+        let rewrite = try RustNSORewriter.rewrite(file, moduleName: moduleName, gameProfile: gameProfile, gamesDirectory: gamesDirectory)
         let requiredImageSize = module.segments.map { Int($0.memoryOffset) + Int($0.memorySize) }.max() ?? 0
         guard rewrite.image.count >= requiredImageSize else {
             throw RustNSORewriterError.invalidOutput

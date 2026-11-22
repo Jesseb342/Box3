@@ -38,19 +38,29 @@ public enum RustNSORewriterError: Error, LocalizedError {
 /// Calls the pinned iBuilder rewriter through Box3's narrow C ABI. It returns staged bytes and metadata only;
 /// it does not assemble a Mach-O executable or package an IPA.
 public enum RustNSORewriter {
-    public static func rewrite(_ data: Data, moduleName: String, gameProfile: String? = nil) throws -> RustNSORewrite {
+    public static func rewrite(_ data: Data, moduleName: String, gameProfile: String? = nil, gamesDirectory: URL? = nil) throws -> RustNSORewrite {
         guard !data.isEmpty, !moduleName.isEmpty else { throw RustNSORewriterError.rejected("NSO data and module name are required.") }
         var handle: OpaquePointer?
         var error = [CChar](repeating: 0, count: 2048)
         let status = data.withUnsafeBytes { input in
             error.withUnsafeMutableBufferPointer { err in
                 moduleName.withCString { name in
-                    if let gameProfile {
-                        return gameProfile.withCString { profile in
-                            box3_rewrite_nso(input.bindMemory(to: UInt8.self).baseAddress, input.count, name, profile, &handle, err.baseAddress, err.count)
+                    let invoke: (UnsafePointer<CChar>?, UnsafePointer<CChar>?) -> Int32 = { profile, directory in
+                        box3_rewrite_nso(input.bindMemory(to: UInt8.self).baseAddress, input.count, name, profile, directory, &handle, err.baseAddress, err.count)
+                    }
+                    if let gamesDirectory {
+                        guard gamesDirectory.isFileURL else { return 1 }
+                        return gamesDirectory.path.withCString { directory in
+                            if let gameProfile {
+                                return gameProfile.withCString { profile in invoke(profile, directory) }
+                            }
+                            return invoke(nil, directory)
                         }
                     }
-                    return box3_rewrite_nso(input.bindMemory(to: UInt8.self).baseAddress, input.count, name, nil, &handle, err.baseAddress, err.count)
+                    if let gameProfile {
+                        return gameProfile.withCString { profile in invoke(profile, nil) }
+                    }
+                    return invoke(nil, nil)
                 }
             }
         }
