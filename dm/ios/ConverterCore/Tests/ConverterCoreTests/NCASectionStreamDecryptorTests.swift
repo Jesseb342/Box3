@@ -32,7 +32,7 @@ final class NCASectionStreamDecryptorTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: fixture.inputURL) }
         let output = temporaryURL()
         defer { try? FileManager.default.removeItem(at: output) }
-        let keys = try ProdKeys(text: "key_area_key_application_00=\\(hex(fixture.wrappingKey))")
+        let keys = try ProdKeys(text: "key_area_key_application_00=\(hex(fixture.wrappingKey))")
 
         let count = try NCASectionStreamDecryptor.decryptSection(
             inputURL: fixture.inputURL, outputURL: output,
@@ -48,7 +48,7 @@ final class NCASectionStreamDecryptorTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: fixture.inputURL) }
         let output = temporaryURL()
         let unrelated = NCAHeader.Section(index: 0, mediaStart: 9, mediaEnd: 10)
-        let keys = try ProdKeys(text: "header_key=\\(hex(Data(repeating: 0, count: 32)))")
+        let keys = try ProdKeys(text: "header_key=\(hex(Data(repeating: 0, count: 32)))")
 
         XCTAssertThrowsError(try NCASectionStreamDecryptor.decryptSection(
             inputURL: fixture.inputURL, outputURL: output,
@@ -161,6 +161,8 @@ final class NCASectionStreamDecryptorTests: XCTestCase {
         let fileSystemHeader: NCAFileSystemHeader
         let plainSection: Data
         let encryptedFile: Data
+        let inspection: NCAFileInspection
+        let wrappingKey: Data
     }
 
     private func makeFixture(encryption: NCAFileSystemHeader.EncryptionType) throws -> Fixture {
@@ -181,7 +183,21 @@ final class NCASectionStreamDecryptorTests: XCTestCase {
         headerBytes.replaceSubrange((fsOffset + 0x140)..<(fsOffset + 0x148), with: seed)
         let rawFSHeader = headerBytes.subdata(in: fsOffset..<(fsOffset + 0x200))
         headerBytes.replaceSubrange(0x280..<0x2A0, with: Data(SHA256.hash(data: rawFSHeader)))
+        let wrappingKey = Data(repeating: 0x42, count: 16)
+        let slots = [
+            Data(repeating: 0x11, count: 16),
+            Data(repeating: 0x22, count: 16),
+            sectionKey,
+            Data(repeating: 0x44, count: 16)
+        ]
+        let encryptedKeyArea = try AESXTS.encryptECB(
+            slots.reduce(into: Data()) { $0.append($1) }, key: wrappingKey
+        )
+        headerBytes.replaceSubrange(0x300..<0x340, with: encryptedKeyArea)
         let header = try NCAHeader(plaintextHeader: headerBytes)
+        let inspection = NCAFileInspection(
+            header: header, fileSize: UInt64(fileSize), decryptedHeader: headerBytes
+        )
         let section = try XCTUnwrap(header.sections.first)
         let fsHeader = try NCAFileSystemHeader(
             decryptedNCAHeader: headerBytes, sectionIndex: 0,
@@ -198,7 +214,8 @@ final class NCASectionStreamDecryptorTests: XCTestCase {
         let inputURL = temporaryURL()
         try encryptedFile.write(to: inputURL)
         return Fixture(inputURL: inputURL, section: section, fileSystemHeader: fsHeader,
-                       plainSection: plainSection, encryptedFile: encryptedFile)
+                       plainSection: plainSection, encryptedFile: encryptedFile,
+                       inspection: inspection, wrappingKey: wrappingKey)
     }
 
     private func makeFileSystemHeader(index: Int, encryption: NCAFileSystemHeader.EncryptionType) throws -> NCAFileSystemHeader {
@@ -214,6 +231,10 @@ final class NCASectionStreamDecryptorTests: XCTestCase {
             decryptedNCAHeader: bytes, sectionIndex: index,
             expectedHash: Data(SHA256.hash(data: raw))
         )
+    }
+
+    private func hex(_ data: Data) -> String {
+        data.map { String(format: "%02x", $0) }.joined()
     }
 
     private func temporaryURL() -> URL {
