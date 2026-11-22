@@ -10,6 +10,7 @@ public enum NSOMachOAssemblyPipelineError: Error, LocalizedError, Equatable {
     case duplicateModuleName(String)
     case missingPatchedModule(String)
     case missingFixups(String)
+    case missingGates(String)
 
     public var errorDescription: String? {
         switch self {
@@ -105,6 +106,11 @@ public enum NSOMachOAssemblyPipeline {
             guard manager.fileExists(atPath: fixups.path),
                   (try? fixups.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true else {
                 throw NSOMachOAssemblyPipelineError.missingFixups(name)
+            }
+            let gates = rewrittenModulesDirectory.appendingPathComponent("\(name).gates.tsv")
+            guard manager.fileExists(atPath: gates.path),
+                  (try? gates.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true else {
+                throw NSOMachOAssemblyPipelineError.missingGates(name)
             }
         }
         return modules
