@@ -144,6 +144,7 @@ final class PlayerBundleStagerTests: XCTestCase {
         try FileManager.default.createDirectory(at: modules, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: shaders, withIntermediateDirectories: true)
         try Data("player".utf8).write(to: template.appendingPathComponent("GameApp"))
+        try Data("template-host".utf8).write(to: template.appendingPathComponent("host-prebuilt.dylib"))
         let appPlist: [String: Any] = [
             "CFBundleIdentifier": "dev.ibuilder.app",
             "CFBundleDisplayName": "iBuilder",
