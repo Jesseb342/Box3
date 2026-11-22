@@ -30,9 +30,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Run native converter core tests
-        run: swift test --package-path dm/ios/ConverterCore
+      - name: Verify Rust toolchain
+        run: |
+          rustc --version
+          cargo --version
       - name: Test vendored NSO loader and C ABI bridge
         run: cargo test --manifest-path dm/ios/Rust/Cargo.toml --workspace
       - name: Build NSO bridge static library for macOS host
         run: cargo build --manifest-path dm/ios/Rust/Cargo.toml --release -p box3-nso-bridge
+      - name: Run native converter core tests
+        run: swift test --package-path dm/ios/ConverterCore
