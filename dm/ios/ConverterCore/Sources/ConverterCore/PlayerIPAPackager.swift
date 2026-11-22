@@ -5,11 +5,14 @@ public enum PlayerIPAPackagerError: Error, Equatable, LocalizedError {
     case invalidAppBundle
     case missingPlayerExecutable
     case missingFramework
+    case missingHostRuntime
     case missingPlayerManifest
     case missingRomFS
     case missingProfile
     case missingShaders
     case invalidPlayerManifest
+    case invalidBundleIdentity
+    case keyMaterialFound(String)
     case profileTitleIDMismatch
     case outputAlreadyExists
     case invalidOutputURL
@@ -22,11 +25,14 @@ public enum PlayerIPAPackagerError: Error, Equatable, LocalizedError {
         case .invalidAppBundle: return "The staged player app is missing or is not a directory."
         case .missingPlayerExecutable: return "The staged app is missing its GameApp executable."
         case .missingFramework: return "The staged app is missing DmGameProbe.framework."
+        case .missingHostRuntime: return "The staged app is missing its host runtime library."
         case .missingPlayerManifest: return "The staged app is missing ExportedGame/manifest.tsv."
         case .missingRomFS: return "The complete RomFS.img is missing from the app bundle."
         case .missingProfile: return "The staged player profile is missing."
         case .missingShaders: return "The game's shader payload is missing."
         case .invalidPlayerManifest: return "The player manifest is missing required game identity fields."
+        case .invalidBundleIdentity: return "The app and framework bundle identifiers do not match the game title ID."
+        case .keyMaterialFound(let path): return "Refusing to package Switch key material: \\(path)."
         case .profileTitleIDMismatch: return "The profile and player manifest identify different games."
         case .outputAlreadyExists: return "The IPA output already exists."
         case .invalidOutputURL: return "The IPA output must be a local .ipa file URL."
@@ -104,6 +110,8 @@ public enum PlayerIPAPackager {
         guard isRegularFile(player) else { throw PlayerIPAPackagerError.missingPlayerExecutable }
         let info = appURL.appendingPathComponent("Info.plist")
         guard isRegularFile(info) else { throw PlayerIPAPackagerError.invalidAppBundle }
+        let host = appURL.appendingPathComponent("host-prebuilt.dylib")
+        guard isRegularFile(host) else { throw PlayerIPAPackagerError.missingHostRuntime }
         let framework = appURL.appendingPathComponent("Frameworks/DmGameProbe.framework/DmGameProbe")
         guard isRegularFile(framework) else { throw PlayerIPAPackagerError.missingFramework }
 
@@ -117,6 +125,24 @@ public enum PlayerIPAPackager {
               titleID.count == 16,
               titleID.allSatisfy({ $0.isHexDigit }) else {
             throw PlayerIPAPackagerError.invalidPlayerManifest
+        }
+
+        let appInfo = try PropertyListSerialization.propertyList(
+            from: Data(contentsOf: info), options: [], format: nil
+        ) as? [String: Any] ?? [:]
+        let expectedBundleSuffix = ".g" + titleID
+        guard let appBundleID = appInfo["CFBundleIdentifier"] as? String,
+              appBundleID.hasSuffix(expectedBundleSuffix),
+              appInfo["CFBundleDisplayName"] as? String == manifest["name"] else {
+            throw PlayerIPAPackagerError.invalidBundleIdentity
+        }
+        let frameworkInfoURL = appURL.appendingPathComponent("Frameworks/DmGameProbe.framework/Info.plist")
+        guard isRegularFile(frameworkInfoURL),
+              let frameworkInfo = try PropertyListSerialization.propertyList(
+                from: Data(contentsOf: frameworkInfoURL), options: [], format: nil
+              ) as? [String: Any],
+              frameworkInfo["CFBundleIdentifier"] as? String == appBundleID + ".DmGameProbe" else {
+            throw PlayerIPAPackagerError.invalidBundleIdentity
         }
 
         let romFSURL = gameRoot.appendingPathComponent("extract/RomFS.img")
@@ -162,6 +188,10 @@ public enum PlayerIPAPackager {
         for case let url as URL in enumerator {
             let values = try url.resourceValues(forKeys: [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey])
             if values.isDirectory == true { continue }
+            let lowerName = url.lastPathComponent.lowercased()
+            if lowerName == "prod.keys" || lowerName == "title.keys" {
+                throw PlayerIPAPackagerError.keyMaterialFound(url.lastPathComponent)
+            }
             let relative = String(url.standardizedFileURL.path.dropFirst(rootPrefix.count))
             guard !relative.isEmpty, !relative.hasPrefix("../"), !relative.contains("/../") else {
                 throw PlayerIPAPackagerError.unsupportedFileType(url.path)
