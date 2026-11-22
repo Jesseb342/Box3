@@ -3,6 +3,26 @@ import XCTest
 @testable import ConverterCore
 
 final class NSPMultiPackageRewritePipelineTests: XCTestCase {
+    func testRebasesModuleDirectoryAfterPublishedOutputMove() throws {
+        let staging = URL(fileURLWithPath: "/tmp/.game-staging", isDirectory: true)
+        let output = URL(fileURLWithPath: "/tmp/game-output", isDirectory: true)
+        let original = staging.appendingPathComponent("base/module-sets/0000-section-0/rewritten/modules", isDirectory: true)
+        let relocated = try NSPExecutableRewritePipeline.rebased(original, from: staging, to: output)
+        XCTAssertEqual(
+            relocated.path,
+            "/tmp/game-output/base/module-sets/0000-section-0/rewritten/modules"
+        )
+    }
+
+    func testRejectsModuleDirectoryOutsideStagingRoot() {
+        let staging = URL(fileURLWithPath: "/tmp/.game-staging", isDirectory: true)
+        let output = URL(fileURLWithPath: "/tmp/game-output", isDirectory: true)
+        let outside = URL(fileURLWithPath: "/tmp/other/modules", isDirectory: true)
+        XCTAssertThrowsError(try NSPExecutableRewritePipeline.rebased(outside, from: staging, to: output)) { error in
+            XCTAssertEqual(error as? NSPExecutableRewritePipelineError, .invalidStagingPath)
+        }
+    }
+
     func testOrdersBaseBeforeUpdateAndDLC() throws {
         let inputs = [
             NSPPackageInput(role: .dlc, url: URL(fileURLWithPath: "/tmp/dlc.nsp")),
