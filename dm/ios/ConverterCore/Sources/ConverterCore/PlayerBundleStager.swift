@@ -122,6 +122,10 @@ public enum PlayerBundleStager {
 
         do {
             try removeCodeSignatures(in: output, fileManager: fileManager)
+            let oldGamePayload = output.appendingPathComponent(exportedGameFolder, isDirectory: true)
+            if fileManager.fileExists(atPath: oldGamePayload.path) {
+                try fileManager.removeItem(at: oldGamePayload)
+            }
             let appInfoURL = output.appendingPathComponent("Info.plist")
             let appInfo = try readPropertyList(at: appInfoURL)
             let baseIdentifier = appInfo["CFBundleIdentifier"] as? String ?? "dev.ibuilder.app"
@@ -144,6 +148,10 @@ public enum PlayerBundleStager {
             if fileManager.fileExists(atPath: frameworkDestination.path) {
                 try fileManager.removeItem(at: frameworkDestination)
             }
+            try fileManager.createDirectory(
+                at: frameworkDestination.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
             try fileManager.copyItem(at: request.frameworkURL, to: frameworkDestination)
             try removeCodeSignatures(in: frameworkDestination, fileManager: fileManager)
 
@@ -171,8 +179,14 @@ public enum PlayerBundleStager {
             let shadersDestination = gameRoot.appendingPathComponent("shaders", isDirectory: true)
                 .appendingPathComponent(request.titleID, isDirectory: true)
             let documentsDestination = gameRoot.appendingPathComponent("documents", isDirectory: true)
-            try fileManager.createDirectory(at: flatDestination, withIntermediateDirectories: true)
-            try fileManager.createDirectory(at: shadersDestination, withIntermediateDirectories: true)
+            try fileManager.createDirectory(
+                at: flatDestination.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try fileManager.createDirectory(
+                at: shadersDestination.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
             try fileManager.createDirectory(at: documentsDestination, withIntermediateDirectories: true)
             try fileManager.copyItem(at: request.rewrittenModulesURL, to: flatDestination)
             try fileManager.copyItem(at: request.romFSURL, to: romfsDestination)
@@ -224,7 +238,8 @@ public enum PlayerBundleStager {
         }
         guard request.templateAppURL.isFileURL,
               fileManager.fileExists(atPath: request.templateAppURL.appendingPathComponent(playerExecutableName).path),
-              fileManager.fileExists(atPath: request.templateAppURL.appendingPathComponent("Info.plist").path) else {
+              fileManager.fileExists(atPath: request.templateAppURL.appendingPathComponent("Info.plist").path),
+              fileManager.fileExists(atPath: request.templateAppURL.appendingPathComponent(hostFileName).path) else {
             throw PlayerBundleStagerError.missingPlayerExecutable
         }
         guard request.hostURL.isFileURL,
@@ -244,7 +259,7 @@ public enum PlayerBundleStager {
             throw PlayerBundleStagerError.missingRewrittenModules
         }
         guard request.romFSURL.isFileURL,
-              (try? fileSize(request.romFSURL)) ?? 0 > 0 else {
+              ((try? fileSize(request.romFSURL)) ?? 0) > 0 else {
             throw PlayerBundleStagerError.emptyRomFS
         }
         guard request.shadersURL.isFileURL,
@@ -253,7 +268,7 @@ public enum PlayerBundleStager {
             throw PlayerBundleStagerError.missingShaderFiles
         }
         guard request.profileURL.isFileURL,
-              (try? fileSize(request.profileURL)) ?? 0 > 0 else {
+              ((try? fileSize(request.profileURL)) ?? 0) > 0 else {
             throw PlayerBundleStagerError.emptyProfile
         }
         guard request.outputAppURL.isFileURL,
@@ -269,7 +284,7 @@ public enum PlayerBundleStager {
         guard let enumerator = fileManager.enumerator(
             at: directory,
             includingPropertiesForKeys: [.isDirectoryKey],
-            options: [.skipsPackageDescendants]
+            options: []
         ) else { return }
         var removals: [URL] = []
         for case let url as URL in enumerator {
