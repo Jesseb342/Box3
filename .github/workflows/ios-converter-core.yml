@@ -41,6 +41,16 @@ jobs:
         run: brew install xcodegen
       - name: Generate standalone converter app project
         run: xcodegen generate --spec dm/ios/ConverterApp/project.yml --project dm/ios/ConverterApp
-      - name: Compile standalone iOS converter app
+      - name: Build unsigned Swapp diagnostic app
         run: |
-          xcodebuild -project dm/ios/ConverterApp/Box3Converter.xcodeproj -scheme Box3Converter -configuration Release -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build
+          xcodebuild -project dm/ios/ConverterApp/Box3Converter.xcodeproj -scheme Box3Converter -configuration Release -destination 'generic/platform=iOS' -derivedDataPath "$RUNNER_TEMP/swapp-derived" CODE_SIGNING_ALLOWED=NO build
+          mkdir -p "$RUNNER_TEMP/swapp-ipa/Payload"
+          cp -R "$RUNNER_TEMP/swapp-derived/Build/Products/Release-iphoneos/Swapp.app" "$RUNNER_TEMP/swapp-ipa/Payload/"
+          cd "$RUNNER_TEMP/swapp-ipa"
+          ditto -c -k --sequesterRsrc --keepParent Payload "$RUNNER_TEMP/Swapp-Diagnostic.ipa"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: Swapp-Diagnostic-IPA
+          path: ${{ runner.temp }}/Swapp-Diagnostic.ipa
+          if-no-files-found: error
+          retention-days: 7
