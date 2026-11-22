@@ -21,7 +21,7 @@ public struct NSORewriteBatchModuleSummary: Codable, Equatable {
     public let padTo: UInt64
 }
 
-public struct NSORewriteBatchResult {
+public struct NSOGameModuleBatchResult {
     public let outputDirectory: URL
     public let modules: [NSORewriteBatchModuleSummary]
 }
@@ -37,7 +37,7 @@ public enum NSORewriteBatchProcessor {
         gameProfile: String? = nil,
         gamesDirectory: URL? = nil,
         maximumModuleSize: UInt64 = defaultMaximumModuleSize
-    ) throws -> NSORewriteBatchResult {
+    ) throws -> NSOGameModuleBatchResult {
         let manager = FileManager.default
         guard exefsDirectory.isFileURL,
               (try? exefsDirectory.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true else {
@@ -133,7 +133,7 @@ public enum NSORewriteBatchProcessor {
             let manifest = try JSONEncoder.box3Manifest.encode(summaries)
             try manifest.write(to: staging.appendingPathComponent("manifest.json"), options: [.atomic])
             try manager.moveItem(at: staging, to: outputDirectory)
-            return NSORewriteBatchResult(outputDirectory: outputDirectory, modules: summaries)
+            return NSOGameModuleBatchResult(outputDirectory: outputDirectory, modules: summaries)
         } catch {
             try? manager.removeItem(at: staging)
             throw error
@@ -141,9 +141,8 @@ public enum NSORewriteBatchProcessor {
     }
 
     private static func canonicalModuleName(_ filename: String) -> String? {
-        let base = filename.lowercased().hasSuffix(".nso")
-            ? String(filename.dropLast(4))
-            : filename
+        let lowered = filename.lowercased()
+        let base = lowered.hasSuffix(".nso") ? String(lowered.dropLast(4)) : lowered
         if ["main", "rtld", "sdk"].contains(base) { return base }
         if base.hasPrefix("subsdk"), base.count > 6,
            base.dropFirst(6).allSatisfy(\.isNumber) { return base }

@@ -2,7 +2,7 @@ import Foundation
 
 public struct NCAExeFSRewriteResult {
     public let extraction: NCASectionPFS0Extractor.Result
-    public let rewrite: NSORewriteBatchResult
+    public let rewrite: NSOGameModuleBatchResult
 }
 
 /// Integrity-verifies and extracts an NCA ExeFS PFS0 section, then rewrites its NSO modules.
