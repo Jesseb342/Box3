@@ -24,6 +24,44 @@ final class PFS0ArchiveTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: output.appendingPathComponent("empty.nca")), Data())
     }
 
+    func testReadsPFS0AtOffsetWithinLargerDecryptedSection() throws {
+        let archiveBytes = makeArchive([("program.nso", Data("NSO!".utf8))])
+        var container = Data(repeating: 0xA5, count: 0x200)
+        container.append(archiveBytes)
+        container.append(Data(repeating: 0x5A, count: 0x80))
+        let source = try writeTemporary(container)
+        defer { try? FileManager.default.removeItem(at: source) }
+
+        let archive = try PFS0Archive(url: source, offset: 0x200, size: UInt64(archiveBytes.count))
+        XCTAssertEqual(archive.entries.map(\\.name), ["program.nso"])
+        let output = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: output) }
+        try archive.copyEntry(named: "program.nso", to: output)
+        XCTAssertEqual(try Data(contentsOf: output), Data("NSO!".utf8))
+    }
+
+    func testRegionBoundsPreventTrailingContainerBytesFromHidingInvalidEntry() throws {
+        let archiveBytes = makeArchive([("bad.nca", Data("x".utf8))], declaredSize: 100)
+        var container = archiveBytes
+        container.append(Data(repeating: 0, count: 256))
+        let source = try writeTemporary(container)
+        defer { try? FileManager.default.removeItem(at: source) }
+
+        XCTAssertThrowsError(try PFS0Archive(
+            url: source, offset: 0, size: UInt64(archiveBytes.count)
+        )) { error in
+            XCTAssertEqual(error as? PFS0Error, .entryOutsideArchive("bad.nca"))
+        }
+    }
+
+    func testRejectsRegionOutsideSourceFile() throws {
+        let source = try writeTemporary(Data(repeating: 0, count: 32))
+        defer { try? FileManager.default.removeItem(at: source) }
+        XCTAssertThrowsError(try PFS0Archive(url: source, offset: 16, size: 32)) { error in
+            XCTAssertEqual(error as? PFS0Error, .truncatedData)
+        }
+    }
+
     func testRejectsWrongMagic() throws {
         let source = try writeTemporary(Data(repeating: 0, count: 32))
         XCTAssertThrowsError(try PFS0Archive(url: source)) { error in

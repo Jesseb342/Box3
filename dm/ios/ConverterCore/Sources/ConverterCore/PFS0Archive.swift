@@ -39,13 +39,18 @@ public final class PFS0Archive {
     private static let maximumStringTableSize: UInt32 = 64 * 1024 * 1024
     private static let copyChunkSize = 8 * 1024 * 1024
 
-    public init(url: URL) throws {
+    /// Reads a PFS0 archive located inside a larger file. `offset` and `size`\n    /// delimit the exact archive region; trailing bytes outside it are ignored.\n    public init(url: URL, offset: UInt64 = 0, size: UInt64? = nil) throws {
         let handle = try FileHandle(forReadingFrom: url)
         defer { try? handle.close() }
 
         let fileSize = try handle.seekToEnd()
-        guard fileSize >= Self.headerSize else { throw PFS0Error.truncatedData }
-        try handle.seek(toOffset: 0)
+        guard offset <= fileSize else { throw PFS0Error.truncatedData }
+        let regionSize = size ?? (fileSize - offset)
+        let (regionEnd, regionOverflow) = offset.addingReportingOverflow(regionSize)
+        guard !regionOverflow, regionEnd <= fileSize, regionSize >= Self.headerSize else {
+            throw PFS0Error.truncatedData
+        }
+        try handle.seek(toOffset: offset)
         let header = try Self.readExactly(Self.headerSize, from: handle)
         guard header.prefix(4) == Data([0x50, 0x46, 0x53, 0x30]) else {
             throw PFS0Error.invalidMagic
@@ -66,10 +71,14 @@ public final class PFS0Archive {
         guard !tableEnd.overflow else { throw PFS0Error.arithmeticOverflow }
         let dataOffsetResult = tableEnd.partialValue.addingReportingOverflow(UInt64(stringTableSize))
         guard !dataOffsetResult.overflow else { throw PFS0Error.arithmeticOverflow }
-        let dataOffset = dataOffsetResult.partialValue
-        guard dataOffset <= fileSize else { throw PFS0Error.truncatedData }
+        let dataOffsetWithinRegion = dataOffsetResult.partialValue
+        guard dataOffsetWithinRegion <= regionSize else { throw PFS0Error.truncatedData }
+        let absoluteDataOffset = offset.addingReportingOverflow(dataOffsetWithinRegion)
+        guard !absoluteDataOffset.overflow else { throw PFS0Error.arithmeticOverflow }
 
-        try handle.seek(toOffset: Self.headerSize)
+        let entriesOffset = offset.addingReportingOverflow(Self.headerSize)
+        guard !entriesOffset.overflow else { throw PFS0Error.arithmeticOverflow }
+        try handle.seek(toOffset: entriesOffset.partialValue)
         let rawEntries = try Self.readExactly(tableBytes.partialValue, from: handle)
         let stringTable = try Self.readExactly(UInt64(stringTableSize), from: handle)
 
@@ -104,8 +113,10 @@ public final class PFS0Archive {
 
             let end = offset.addingReportingOverflow(size)
             guard !end.overflow else { throw PFS0Error.arithmeticOverflow }
-            let absoluteEnd = dataOffset.addingReportingOverflow(end.partialValue)
-            guard !absoluteEnd.overflow, absoluteEnd.partialValue <= fileSize else {
+            let availablePayloadSize = regionSize - dataOffsetWithinRegion
+            let absoluteEnd = absoluteDataOffset.partialValue.addingReportingOverflow(end.partialValue)
+            guard end.partialValue <= availablePayloadSize,
+                  !absoluteEnd.overflow, absoluteEnd.partialValue <= regionEnd else {
                 throw PFS0Error.entryOutsideArchive(name)
             }
 
@@ -115,7 +126,7 @@ public final class PFS0Archive {
         }
 
         self.sourceURL = url
-        self.dataRegionOffset = dataOffset
+        self.dataRegionOffset = absoluteDataOffset.partialValue
         self.entries = parsed
         self.entriesByName = byName
     }
