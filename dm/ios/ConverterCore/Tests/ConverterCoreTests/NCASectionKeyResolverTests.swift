@@ -60,11 +60,17 @@ final class NCASectionKeyResolverTests: XCTestCase {
     private func makePlainHeader(oldGeneration: UInt8, newGeneration: UInt8, area: UInt8, encrypted: Data) -> Data {
         var bytes = Data(repeating: 0, count: 0xC00)
         bytes.replaceSubrange(0x200..<0x204, with: Data("NCA3".utf8))
+        putLE(UInt64(0x4000), at: 0x208, in: &bytes)
         bytes[0x206] = oldGeneration
         bytes[0x207] = area
         bytes[0x220] = newGeneration
         bytes.replaceSubrange(0x300..<0x340, with: encrypted)
         return bytes
+    }
+
+    private func putLE<T: FixedWidthInteger>(_ value: T, at offset: Int, in data: inout Data) {
+        var little = value.littleEndian
+        withUnsafeBytes(of: &little) { data.replaceSubrange(offset..<(offset + $0.count), with: $0) }
     }
 
     private func hex(_ data: Data) -> String { data.map { String(format: "%02x", $0) }.joined() }
