@@ -65,7 +65,7 @@ struct ConverterView: View {
                     }
                 }
             }
-            .navigationTitle("Box3 Converter")
+            .navigationTitle("Swapp")
             .fileImporter(
                 isPresented: $showingImporter,
                 allowedContentTypes: [.data],
@@ -124,7 +124,7 @@ struct ConverterView: View {
         if let dlc = files[.dlc] { packages.append(NSPPackageInput(role: .dlc, url: dlc)) }
         let titleKeys = files[.titleKeys]
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let output = documents.appendingPathComponent("Box3-Modules-\(UUID().uuidString)", isDirectory: true)
+        let output = documents.appendingPathComponent("Swapp-Modules-\(UUID().uuidString)", isDirectory: true)
         isRunning = true
         status = "Inspecting NSP files, decrypting supported sections, verifying PFS0, and rewriting modules…"
         outputPath = ""
