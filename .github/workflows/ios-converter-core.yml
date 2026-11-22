@@ -30,11 +30,13 @@ jobs:
         run: |
           cargo build --manifest-path dm/ios/Rust/Cargo.toml --release -p box3-nso-bridge
           cargo build --manifest-path dm/ios/Rust/Cargo.toml --release -p box3-rewrite-bridge
+          cargo build --manifest-path dm/ios/Rust/Cargo.toml --release -p box3-macho-bridge
       - name: Build Rust static libraries for physical iOS devices
         run: |
           rustup target add aarch64-apple-ios
           cargo build --manifest-path dm/ios/Rust/Cargo.toml --release --target aarch64-apple-ios -p box3-nso-bridge
           cargo build --manifest-path dm/ios/Rust/Cargo.toml --release --target aarch64-apple-ios -p box3-rewrite-bridge
+          cargo build --manifest-path dm/ios/Rust/Cargo.toml --release --target aarch64-apple-ios -p box3-macho-bridge
       - name: Run native converter core tests
         run: swift test --package-path dm/ios/ConverterCore
       - name: Install XcodeGen

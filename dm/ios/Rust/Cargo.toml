@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["box3-nso-bridge", "box3-rewrite-bridge", "vendor/ibuilder-nso", "vendor/ibuilder-a64", "vendor/ibuilder-rewrite"]
+members = ["box3-nso-bridge", "box3-rewrite-bridge", "box3-macho-bridge", "vendor/ibuilder-nso", "vendor/ibuilder-a64", "vendor/ibuilder-rewrite", "vendor/ibuilder-macho"]
 
 [workspace.package]
 edition = "2024"

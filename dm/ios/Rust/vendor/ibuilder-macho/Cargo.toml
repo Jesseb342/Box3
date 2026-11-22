@@ -1,0 +1,10 @@
+[package]
+name = "ibuilder-macho"
+version = "0.1.2"
+edition.workspace = true
+license.workspace = true
+description = "Pinned iBuilder v0.1.2 linker-less Mach-O framework assembler"
+
+[lib]
+name = "ibuilder_macho"
+path = "src/lib.rs"
