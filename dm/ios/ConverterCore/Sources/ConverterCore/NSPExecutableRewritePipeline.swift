@@ -90,33 +90,70 @@ public enum NSPExecutableRewritePipeline {
 
                 for section in inspection.header.sections {
                     let fsHeader = try inspection.fileSystemHeader(for: section)
-                    guard fsHeader.fileSystemType == .partitionFS else { continue }
-                    guard fsHeader.hashType == .hierarchicalSHA256,
-                          fsHeader.encryptionType == .aesCTR else {
-                        continue
+                    switch fsHeader.fileSystemType {
+                    case .partitionFS:
+                        guard fsHeader.hashType == .hierarchicalSHA256,
+                              fsHeader.encryptionType == .aesCTR else {
+                            throw NSPExecutableRewritePipelineError.unsupportedProgramSection(
+                                sectionIndex: section.index,
+                                fileSystemType: fsHeader.fileSystemType,
+                                hashType: fsHeader.hashType,
+                                encryptionType: fsHeader.encryptionType
+                            )
+                        }
+                        let sectionOutput = resultDirectory.appendingPathComponent(
+                            String(format: "%04d-section-%d", index, section.index),
+                            isDirectory: true
+                        )
+                        let rewritten = try NCAExecutableRewritePipeline.process(
+                            ncaURL: ncaURL,
+                            sectionIndex: section.index,
+                            keys: keys,
+                            titleKeys: titleKeys,
+                            gamesDirectory: gamesDirectory,
+                            gameProfile: gameProfile ?? String(format: "%016llx", inspection.header.titleID),
+                            outputDirectory: sectionOutput
+                        )
+                        moduleSets.append(NSPExecutableRewriteModuleSet(
+                            ncaFileName: entry.name,
+                            titleID: rewritten.titleID,
+                            sectionIndex: rewritten.sectionIndex,
+                            verifiedPFS0Blocks: rewritten.verifiedPFS0Blocks,
+                            extractedEntryCount: rewritten.extractedEntryCount,
+                            modules: rewritten.modules,
+                            rewrittenModulesDirectory: rewritten.rewrittenModulesDirectory
+                        ))
+                    case .romFS:
+                        guard fsHeader.hashType == .hierarchicalIntegrity,
+                              fsHeader.encryptionType == .aesCTR else {
+                            throw NSPExecutableRewritePipelineError.unsupportedProgramSection(
+                                sectionIndex: section.index,
+                                fileSystemType: fsHeader.fileSystemType,
+                                hashType: fsHeader.hashType,
+                                encryptionType: fsHeader.encryptionType
+                            )
+                        }
+                        let relativePath = String(format: "romfs/%04d-section-%d/RomFS.img", index, section.index)
+                        let imageURL = resultDirectory.appendingPathComponent(relativePath)
+                        let extracted = try NCASectionRomFSExtractor.extract(
+                            inputURL: ncaURL,
+                            inspection: inspection,
+                            section: section,
+                            keys: keys,
+                            titleKeys: titleKeys,
+                            to: imageURL
+                        )
+                        romFSImages.append(NSPRomFSImageSummary(
+                            ncaFileName: entry.name,
+                            titleID: String(format: "%016llx", inspection.header.titleID),
+                            sectionIndex: section.index,
+                            imageURL: extracted.outputURL,
+                            relativePath: relativePath,
+                            imageSize: extracted.imageSize,
+                            verifiedBlockCount: extracted.verifiedBlockCount,
+                            entryCount: extracted.entryCount
+                        ))
                     }
-                    let sectionOutput = resultDirectory.appendingPathComponent(
-                        String(format: "%04d-section-%d", index, section.index),
-                        isDirectory: true
-                    )
-                    let rewritten = try NCAExecutableRewritePipeline.process(
-                        ncaURL: ncaURL,
-                        sectionIndex: section.index,
-                        keys: keys,
-                        titleKeys: titleKeys,
-                        gamesDirectory: gamesDirectory,
-                        gameProfile: gameProfile ?? String(format: "%016llx", inspection.header.titleID),
-                        outputDirectory: sectionOutput
-                    )
-                    moduleSets.append(NSPExecutableRewriteModuleSet(
-                        ncaFileName: entry.name,
-                        titleID: rewritten.titleID,
-                        sectionIndex: rewritten.sectionIndex,
-                        verifiedPFS0Blocks: rewritten.verifiedPFS0Blocks,
-                        extractedEntryCount: rewritten.extractedEntryCount,
-                        modules: rewritten.modules,
-                        rewrittenModulesDirectory: rewritten.rewrittenModulesDirectory
-                    ))
                 }
             }
 
