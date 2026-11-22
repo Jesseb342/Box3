@@ -22,6 +22,7 @@ public enum NSPMultiPackageRewriteError: Error, Equatable {
     case duplicatePackageURL
     case invalidPackageURL(NSPPackageRole)
     case couldNotCreateStagingDirectory
+    case invalidStagingPath
 }
 
 public struct NSPPackageRewriteSummary {
@@ -119,10 +120,29 @@ public enum NSPMultiPackageRewritePipeline {
             )
             try manifestData.write(to: staging.appendingPathComponent("manifest.json"), options: [.atomic])
             try manager.moveItem(at: staging, to: outputDirectory)
+            let publishedSummaries = try summaries.map { summary in
+                NSPPackageRewriteSummary(
+                    role: summary.role,
+                    ncaCount: summary.ncaCount,
+                    moduleSets: try summary.moduleSets.map { moduleSet in
+                        NSPExecutableRewriteModuleSet(
+                            ncaFileName: moduleSet.ncaFileName,
+                            titleID: moduleSet.titleID,
+                            sectionIndex: moduleSet.sectionIndex,
+                            verifiedPFS0Blocks: moduleSet.verifiedPFS0Blocks,
+                            extractedEntryCount: moduleSet.extractedEntryCount,
+                            modules: moduleSet.modules,
+                            rewrittenModulesDirectory: try NSPExecutableRewritePipeline.rebased(
+                                moduleSet.rewrittenModulesDirectory, from: staging, to: outputDirectory
+                            )
+                        )
+                    }
+                )
+            }
             return NSPMultiPackageRewriteResult(
                 gameProfile: gameProfile,
                 outputDirectory: outputDirectory,
-                packages: summaries
+                packages: publishedSummaries
             )
         } catch {
             try? manager.removeItem(at: staging)
