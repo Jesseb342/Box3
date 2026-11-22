@@ -70,6 +70,8 @@ def main():
         '--release', '--target', 'aarch64-apple-ios', '-p', 'box3-nso-bridge')
     run('cargo', 'build', '--manifest-path', ios / 'Rust/Cargo.toml',
         '--release', '--target', 'aarch64-apple-ios', '-p', 'box3-rewrite-bridge')
+    run('cargo', 'build', '--manifest-path', ios / 'Rust/Cargo.toml',
+        '--release', '--target', 'aarch64-apple-ios', '-p', 'box3-macho-bridge')
     run('xcodegen', 'generate')
 
     # Exercise the real resource-copy phase with tiny, clearly synthetic data.
