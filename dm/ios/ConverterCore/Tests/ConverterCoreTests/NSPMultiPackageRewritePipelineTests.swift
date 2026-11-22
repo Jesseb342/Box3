@@ -23,6 +23,29 @@ final class NSPMultiPackageRewritePipelineTests: XCTestCase {
         }
     }
 
+
+    func testRebasesRomFSImageAfterPublishedOutputMove() throws {
+        let staging = URL(fileURLWithPath: "/tmp/.game-staging", isDirectory: true)
+        let output = URL(fileURLWithPath: "/tmp/game-output", isDirectory: true)
+        let original = staging.appendingPathComponent(
+            "base/module-sets/0000-section-1/romfs/0000-section-1/RomFS.img"
+        )
+        let relocated = try NSPExecutableRewritePipeline.rebased(original, from: staging, to: output)
+        XCTAssertEqual(
+            relocated.path,
+            "/tmp/game-output/base/module-sets/0000-section-1/romfs/0000-section-1/RomFS.img"
+        )
+    }
+
+    func testRejectsRomFSImageOutsideStagingRoot() {
+        let staging = URL(fileURLWithPath: "/tmp/.game-staging", isDirectory: true)
+        let output = URL(fileURLWithPath: "/tmp/game-output", isDirectory: true)
+        let outside = URL(fileURLWithPath: "/tmp/other/RomFS.img")
+        XCTAssertThrowsError(try NSPExecutableRewritePipeline.rebased(outside, from: staging, to: output)) { error in
+            XCTAssertEqual(error as? NSPExecutableRewritePipelineError, .invalidStagingPath)
+        }
+    }
+
     func testOrdersBaseBeforeUpdateAndDLC() throws {
         let inputs = [
             NSPPackageInput(role: .dlc, url: URL(fileURLWithPath: "/tmp/dlc.nsp")),
