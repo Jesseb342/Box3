@@ -1,0 +1,80 @@
+name: Verify and extract iBuilder iOS host
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  extract-host:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - name: Download the pinned official iBuilder release
+        shell: bash
+        run: |
+          set -euo pipefail
+          WORK="$RUNNER_TEMP/swapp-host"
+          mkdir -p "$WORK/out"
+          IPA="$WORK/GameApp-rust-20261122-144325-rust7d81008a.ipa"
+          URL="https://github.com/Absenti/iBuilder/releases/download/v0.1.2/GameApp-rust-20261122-144325-rust7d81008a.ipa"
+          curl --fail --location --retry 3 "$URL" --output "$IPA"
+          echo "812162fa910190a3dfd52c90d27fbfd5c72e2b4a7a34abb5fc554bc49bbcc9f3  $IPA" | shasum -a 256 --check
+          echo "Official release IPA SHA-256 verified."
+          unzip -Z1 "$IPA" | grep -Fx "Payload/GameApp.app/host-prebuilt.dylib"
+          unzip -p "$IPA" "Payload/GameApp.app/host-prebuilt.dylib" > "$WORK/out/host-prebuilt-loadable-ios.dylib"
+          test -s "$WORK/out/host-prebuilt-loadable-ios.dylib"
+
+      - name: Validate the extracted host against the tagged source pins
+        shell: bash
+        run: |
+          set -euo pipefail
+          WORK="$RUNNER_TEMP/swapp-host"
+          HOST="$WORK/out/host-prebuilt-loadable-ios.dylib"
+          EXPECTED_SHA="a66bf16265c9d743a30196efb069a595574ccd8d2c9160e1d35dae907be45b52"
+          EXPECTED_SIZE="6825256"
+          ACTUAL_SHA="$(shasum -a 256 "$HOST" | awk '{print $1}')"
+          ACTUAL_SIZE="$(stat -f '%z' "$HOST")"
+          test "$ACTUAL_SHA" = "$EXPECTED_SHA" || { echo "::error::Host SHA-256 mismatch: $ACTUAL_SHA"; exit 1; }
+          test "$ACTUAL_SIZE" = "$EXPECTED_SIZE" || { echo "::error::Host size mismatch: $ACTUAL_SIZE"; exit 1; }
+          lipo -verify_arch arm64 "$HOST"
+          PLATFORM="$(otool -l "$HOST" | awk '/LC_BUILD_VERSION/{seen=1;next} seen && /platform/{print $2;exit}')"
+          MINOS="$(otool -l "$HOST" | awk '/LC_BUILD_VERSION/{seen=1;next} seen && /minos/{print $2;exit}')"
+          test "$PLATFORM" = "2" || { echo "::error::Expected iOS platform 2, got $PLATFORM"; exit 1; }
+          test "$MINOS" = "26.0" || { echo "::error::Expected minimum iOS 26.0, got $MINOS"; exit 1; }
+          STRINGS="$WORK/host-strings.txt"
+          SYMBOLS="$WORK/host-symbols.txt"
+          strings -a "$HOST" > "$STRINGS"
+          nm -gU "$HOST" > "$SYMBOLS"
+          grep -qx "b24b25240cad" "$STRINGS"
+          for symbol in dm_host_probe_boot dm_front_set_layer dm_front_pad_create dm_front_pad_layout dm_front_pad_layout_tv dm_front_tv_attached dm_game_menu dm_gamepad_view dm_glue_start_game dm_glue_present_game dm_glue_focus_event dm_glue_version dmgame_image_marker dm_gfx_suspend dm_audio_suspend nvn_live_set nvn_live_ready; do
+            grep -qE " T _${symbol}$" "$SYMBOLS" || { echo "::error::Missing host export: $symbol"; exit 1; }
+          done
+          cat > "$WORK/out/HOST-MANIFEST.txt" <<EOF
+          Source: Absenti/iBuilder v0.1.2
+          Release IPA: GameApp-rust-20261122-144325-rust7d81008a.ipa
+          Release IPA SHA-256: 812162fa910190a3dfd52c90d27fbfd5c72e2b4a7a34abb5fc554bc49bbcc9f3
+          Extracted path: Payload/GameApp.app/host-prebuilt.dylib
+          Host SHA-256: $ACTUAL_SHA
+          Host size: $ACTUAL_SIZE bytes
+          Architecture: arm64
+          Mach-O platform: $PLATFORM (iOS)
+          Minimum iOS: $MINOS
+          Shader chain: b24b25240cad
+          Required host exports: all 17 checked
+          Source pin: app/inputs.tsv at iBuilder v0.1.2
+          Host provenance: prebuilt NXNative/NX2Apple engine with the iBuilder v0.1.2 pinned patch set.
+          Validation: release IPA digest, host digest, byte size, architecture, platform, deployment target, shader-chain marker and required exports checked in CI.
+          
+          This is a verified released binary, not a reproducible source build. Keep the upstream iBuilder, NXNative, NX2Apple and third-party license notices with any redistribution. The host has not yet been proven compatible with Swapp's module/profile outputs or booted from a Swapp-generated framework.
+          EOF
+          cat "$WORK/out/HOST-MANIFEST.txt"
+
+      - name: Upload verified host input
+        uses: actions/upload-artifact@v4
+        with:
+          name: Swapp-Verified-iOS-Host
+          path: ${{ runner.temp }}/swapp-host/out/
+          if-no-files-found: error
+          retention-days: 7
