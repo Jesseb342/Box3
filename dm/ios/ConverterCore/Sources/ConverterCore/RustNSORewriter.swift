@@ -11,6 +11,20 @@ public struct RustNSORewrite {
     public let cuts: String
     public let changed: String
     public let observations: String
+
+    /// Reconstructs the on-disk patched module: image, zero padding to padTo, then patch bytes.
+    /// This is an NSO-stage artifact, not an NCA/NSP or IPA.
+    public func makePatchedData() throws -> Data {
+        guard padTo >= image.count, patch.count <= Int.max - padTo else {
+            throw RustNSORewriterError.invalidOutput
+        }
+        var output = image
+        if padTo > output.count {
+            output.append(Data(repeating: 0, count: padTo - output.count))
+        }
+        output.append(patch)
+        return output
+    }
 }
 
 public enum RustNSORewriterError: Error, LocalizedError {

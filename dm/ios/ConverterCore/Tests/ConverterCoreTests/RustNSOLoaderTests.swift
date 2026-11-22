@@ -36,6 +36,16 @@ final class RustNSOLoaderTests: XCTestCase {
         XCTAssertThrowsError(try RustNSORewriter.rewrite(Data("not an NSO".utf8), moduleName: "main"))
     }
 
+    func testRustRewriteOutputPadsImageBeforePatch() throws {
+        let result = RustNSORewrite(image: Data([1, 2]), patch: Data([9, 8]), padTo: 4, fixups: "", gates: "", sites: "", cuts: "", changed: "", observations: "")
+        XCTAssertEqual(try result.makePatchedData(), Data([1, 2, 0, 0, 9, 8]))
+    }
+
+    func testRustRewriteOutputRejectsInvalidPadding() {
+        let result = RustNSORewrite(image: Data([1, 2, 3]), patch: Data([9]), padTo: 2, fixups: "", gates: "", sites: "", cuts: "", changed: "", observations: "")
+        XCTAssertThrowsError(try result.makePatchedData())
+    }
+
     func testRustBridgeRejectsSegmentHashMismatch() throws {
         var fixture = makeNSO()
         fixture[0x100] ^= 0x80
