@@ -21,6 +21,71 @@ final class NCASectionRomFSExtractorTests: XCTestCase {
         XCTAssertEqual(try RomFSArchive(url: fixture.outputURL).entries.count, 1)
     }
 
+    func testIntegratedNCAPathDecryptsVerifiesAndExtractsRomFS() throws {
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.directoryURL) }
+
+        let sectionKey = Data((0..<16).map { UInt8($0) })
+        let wrappingKey = Data(repeating: 0x42, count: 16)
+        let seed = fixture.fileSystemHeader.sectionCounter
+        let sectionOffset: UInt64 = 0x1000
+        let section = NCAHeader.Section(index: 0, mediaStart: 8, mediaEnd: 10)
+        let encryptedSection = try NCASectionCTRCrypt.crypt(
+            data: fixture.section, key: sectionKey, sectionCounter: seed,
+            sectionFileOffset: sectionOffset, offsetWithinSection: 0
+        )
+
+        var rawFSHeader = Data(repeating: 0, count: 0x200)
+        put16(2, at: 0, in: &rawFSHeader)
+        rawFSHeader[2] = 0
+        rawFSHeader[3] = 3
+        rawFSHeader[4] = 3
+        rawFSHeader.replaceSubrange(0x08..<0x100, with: fixture.fileSystemHeader.hashData)
+        rawFSHeader.replaceSubrange(0x140..<0x148, with: seed)
+
+        var headerBytes = Data(repeating: 0, count: 0xC00)
+        headerBytes.replaceSubrange(0x200..<0x204, with: Data("NCA3".utf8))
+        headerBytes[0x205] = 0
+        put64(0x1400, at: 0x208, in: &headerBytes)
+        put64(0x0102030405060708, at: 0x210, in: &headerBytes)
+        put32(8, at: 0x240, in: &headerBytes)
+        put32(10, at: 0x244, in: &headerBytes)
+        headerBytes.replaceSubrange(0x400..<0x600, with: rawFSHeader)
+        headerBytes.replaceSubrange(0x280..<0x2A0,
+                                    with: Data(SHA256.hash(data: rawFSHeader)))
+
+        let slots = [
+            Data(repeating: 0x11, count: 16),
+            Data(repeating: 0x22, count: 16),
+            sectionKey,
+            Data(repeating: 0x44, count: 16)
+        ]
+        let encryptedKeyArea = try AESXTS.encryptECB(
+            slots.reduce(into: Data()) { $0.append($1) }, key: wrappingKey
+        )
+        headerBytes.replaceSubrange(0x300..<0x340, with: encryptedKeyArea)
+
+        let header = try NCAHeader(plaintextHeader: headerBytes, actualFileSize: 0x1400)
+        let inspection = NCAFileInspection(
+            header: header, fileSize: 0x1400, decryptedHeader: headerBytes
+        )
+        let keys = try ProdKeys(text: "key_area_key_application_00=\(hex(wrappingKey))")
+
+        var encryptedNCA = Data(repeating: 0, count: Int(sectionOffset))
+        encryptedNCA.append(encryptedSection)
+        let inputURL = fixture.directoryURL.appendingPathComponent("encrypted-program.nca")
+        try encryptedNCA.write(to: inputURL)
+
+        let result = try NCASectionRomFSExtractor.extract(
+            inputURL: inputURL, inspection: inspection, section: section,
+            keys: keys, to: fixture.outputURL
+        )
+
+        XCTAssertEqual(result.imageSize, UInt64(fixture.romFS.count))
+        XCTAssertEqual(result.entryCount, 1)
+        XCTAssertEqual(try Data(contentsOf: fixture.outputURL), fixture.romFS)
+    }
+
     func testRejectsTamperedRomFSBeforePublishingOutput() throws {
         let fixture = try makeFixture()
         defer { try? FileManager.default.removeItem(at: fixture.directoryURL) }
@@ -137,6 +202,10 @@ final class NCASectionRomFSExtractorTests: XCTestCase {
         try section.write(to: sectionURL)
         return Fixture(directoryURL: directoryURL, sectionURL: sectionURL, outputURL: outputURL,
                        section: section, romFS: romFS, fileSystemHeader: fsHeader)
+    }
+
+    private func hex(_ data: Data) -> String {
+        data.map { String(format: "%02x", $0) }.joined()
     }
 
     private func put16(_ value: UInt16, at offset: Int, in data: inout Data) {
