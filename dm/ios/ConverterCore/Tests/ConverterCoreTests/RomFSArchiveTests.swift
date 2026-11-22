@@ -52,7 +52,7 @@ final class RomFSArchiveTests: XCTestCase {
         append32(0, &data); append32(UInt32.max, &data); append32(0, &data)
         // Child directory "assets" at 0x18.
         append32(0, &data); append32(UInt32.max, &data); append32(UInt32.max, &data)
-        append32(0x20, &data); append32(UInt32.max, &data); append32(6, &data)
+        append32(0x2C, &data); append32(UInt32.max, &data); append32(6, &data)
         data.append(contentsOf: "assets".utf8); data.append(contentsOf: [0,0])
         data.append(contentsOf: [0,0,0,0]) // file hash buckets
         // Root file hello.txt at 0, sibling empty, data offset 0, size 5.
