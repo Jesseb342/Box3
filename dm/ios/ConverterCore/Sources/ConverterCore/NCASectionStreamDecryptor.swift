@@ -6,6 +6,8 @@ public enum NCASectionStreamDecryptorError: Error, Equatable {
     case outputAlreadyExists
     case invalidChunkSize(Int)
     case sectionIndexMismatch(expected: Int, actual: Int)
+    case sectionNotInInspection(Int)
+    case missingTitleKeys
     case unsupportedEncryptionType(NCAFileSystemHeader.EncryptionType)
     case sectionRangeOverflow
     case sectionOutsideFile(offset: UInt64, size: UInt64, fileSize: UInt64)
@@ -108,6 +110,48 @@ public enum NCASectionStreamDecryptor {
         }
 
         return sectionSize
+    }
+
+    /// Resolves the section key from the inspected NCA's standard key area or
+    /// Rights ID title-key material, then decrypts the verified section range.
+    /// The section must exactly match one parsed from the inspection.
+    @discardableResult
+    public static func decryptSection(
+        inputURL: URL,
+        outputURL: URL,
+        inspection: NCAFileInspection,
+        section: NCAHeader.Section,
+        keys: ProdKeys,
+        titleKeys: TitleKeys? = nil,
+        chunkSize: Int = defaultChunkSize
+    ) throws -> UInt64 {
+        guard let verifiedSection = inspection.header.sections.first(where: {
+            $0.index == section.index && $0 == section
+        }) else {
+            throw NCASectionStreamDecryptorError.sectionNotInInspection(section.index)
+        }
+        let fileSystemHeader = try inspection.fileSystemHeader(for: verifiedSection)
+        let sectionKey: Data
+        if inspection.header.usesTitleKeyCrypto {
+            guard let titleKeys else {
+                throw NCASectionStreamDecryptorError.missingTitleKeys
+            }
+            sectionKey = try NCASectionKeyResolver.sectionCTRKey(
+                header: inspection.header, keys: keys, titleKeys: titleKeys
+            )
+        } else {
+            sectionKey = try NCASectionKeyResolver.sectionCTRKey(
+                header: inspection.header, keys: keys
+            )
+        }
+        return try decryptSection(
+            inputURL: inputURL,
+            outputURL: outputURL,
+            section: verifiedSection,
+            fileSystemHeader: fileSystemHeader,
+            key: sectionKey,
+            chunkSize: chunkSize
+        )
     }
 
     private static func readExactly(_ handle: FileHandle, count: Int) throws -> Data {

@@ -27,6 +27,42 @@ final class NCASectionStreamDecryptorTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: fixture.inputURL), fixture.encryptedFile)
     }
 
+    func testIntegratedPathResolvesKeyAreaKeyAndDecryptsInspectedSection() throws {
+        let fixture = try makeFixture(encryption: .aesCTR)
+        defer { try? FileManager.default.removeItem(at: fixture.inputURL) }
+        let output = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: output) }
+        let keys = try ProdKeys(text: "key_area_key_application_00=\\(hex(fixture.wrappingKey))")
+
+        let count = try NCASectionStreamDecryptor.decryptSection(
+            inputURL: fixture.inputURL, outputURL: output,
+            inspection: fixture.inspection, section: fixture.section, keys: keys,
+            chunkSize: 0x523
+        )
+        XCTAssertEqual(count, UInt64(fixture.plainSection.count))
+        XCTAssertEqual(try Data(contentsOf: output), fixture.plainSection)
+    }
+
+    func testIntegratedPathRequiresKeyMaterialAndRejectsUninspectedSection() throws {
+        let fixture = try makeFixture(encryption: .aesCTR)
+        defer { try? FileManager.default.removeItem(at: fixture.inputURL) }
+        let output = temporaryURL()
+        let unrelated = NCAHeader.Section(index: 0, mediaStart: 9, mediaEnd: 10)
+        let keys = try ProdKeys(text: "header_key=\\(hex(Data(repeating: 0, count: 32)))")
+
+        XCTAssertThrowsError(try NCASectionStreamDecryptor.decryptSection(
+            inputURL: fixture.inputURL, outputURL: output,
+            inspection: fixture.inspection, section: unrelated, keys: keys
+        )) { error in
+            XCTAssertEqual(error as? NCASectionStreamDecryptorError, .sectionNotInInspection(0))
+        }
+        XCTAssertThrowsError(try NCASectionStreamDecryptor.decryptSection(
+            inputURL: fixture.inputURL, outputURL: output,
+            inspection: fixture.inspection, section: fixture.section, keys: keys
+        ))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: output.path))
+    }
+
     func testRejectsUnsupportedEncryptionModesBeforeCreatingOutput() throws {
         for mode in [NCAFileSystemHeader.EncryptionType.aesXTS, .aesCTREx, .aesCTRSkipLayerHash, .aesCTRExSkipLayerHash, .automatic, .none] {
             let fixture = try makeFixture(encryption: mode)
