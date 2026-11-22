@@ -109,12 +109,6 @@ public enum NSORewriteBatchProcessor {
                 )
                 let patched = try output.makePatchedData()
                 try patched.write(to: modulesURL.appendingPathComponent("\(name).patched.bin"), options: [.atomic])
-                // iBuilder's Mach-O assembler consumes each module's patched image and fixups TSV
-                // from the same directory. Keep the human-readable report copy as well.
-                try Data(output.rewrite.fixups.utf8).write(
-                    to: modulesURL.appendingPathComponent("\(name).fixups.tsv"),
-                    options: [.atomic]
-                )
                 let reportRows: [(String, String)] = [
                     ("fixups.tsv", output.rewrite.fixups),
                     ("gates.tsv", output.rewrite.gates),
@@ -123,8 +117,12 @@ public enum NSORewriteBatchProcessor {
                     ("changed.tsv", output.rewrite.changed),
                     ("obs.tsv", output.rewrite.observations)
                 ]
+                // iBuilder's assembler and runtime consume the per-module tables beside the
+                // patched image. Keep a second reports/ copy for diagnostics/export.
                 for (suffix, contents) in reportRows {
-                    try Data(contents.utf8).write(to: reportsURL.appendingPathComponent("\(name).\(suffix)"), options: [.atomic])
+                    let data = Data(contents.utf8)
+                    try data.write(to: modulesURL.appendingPathComponent("\(name).\(suffix)"), options: [.atomic])
+                    try data.write(to: reportsURL.appendingPathComponent("\(name).\(suffix)"), options: [.atomic])
                 }
                 summaries.append(NSORewriteBatchModuleSummary(
                     moduleName: name,
