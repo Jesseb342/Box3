@@ -43,7 +43,7 @@ public enum NSOMachOAssemblyPipeline {
         rewrittenModulesDirectory: URL,
         modules: [String],
         outputURL: URL,
-        tag: String = "sw"
+        tag: String = ""
     ) throws -> NSOMachOAssemblyResult {
         let normalized = try validateInputs(
             hostURL: hostURL,
