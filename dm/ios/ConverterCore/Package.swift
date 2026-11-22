@@ -27,6 +27,9 @@ let package = Package(
             .product(name: "ZIPFoundation", package: "ZIPFoundation")
         ]),
         .executableTarget(name: "NCAHeaderReferenceCheck", dependencies: ["ConverterCore"]),
-        .testTarget(name: "ConverterCoreTests", dependencies: ["ConverterCore"])
+        .testTarget(name: "ConverterCoreTests", dependencies: [
+            "ConverterCore",
+            .product(name: "ZIPFoundation", package: "ZIPFoundation")
+        ])
     ]
 )
