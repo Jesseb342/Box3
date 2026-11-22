@@ -16,6 +16,12 @@ public struct NCAExecutableRewriteResult {
     public let extractedEntryCount: Int
     public let modules: [NSORewriteBatchModuleSummary]
     public let outputDirectory: URL
+
+    /// Directory containing <module>.patched.bin and <module>.fixups.tsv files
+    /// for the iBuilder Mach-O assembler.
+    public var rewrittenModulesDirectory: URL {
+        outputDirectory.appendingPathComponent("rewritten/modules", isDirectory: true)
+    }
 }
 
 /// NCA3 -> AES-CTR decrypted section -> verified PFS0 ExeFS -> rewritten NSO modules.
