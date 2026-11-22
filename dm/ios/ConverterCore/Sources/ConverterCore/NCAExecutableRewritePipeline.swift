@@ -28,6 +28,7 @@ public enum NCAExecutableRewritePipeline {
         keys: ProdKeys,
         titleKeys: TitleKeys? = nil,
         gamesDirectory: URL? = nil,
+        gameProfile: String? = nil,
         outputDirectory: URL
     ) throws -> NCAExecutableRewriteResult {
         guard ncaURL.isFileURL else { throw NCAExecutableRewritePipelineError.invalidNCAURL }
@@ -78,7 +79,7 @@ public enum NCAExecutableRewritePipeline {
                 fileSystemHeader: fsHeader,
                 to: extractedURL,
                 rewrittenModulesURL: rewrittenURL,
-                gameProfile: gameID,
+                gameProfile: gameProfile ?? gameID,
                 gamesDirectory: gamesDirectory
             )
             try manager.removeItem(at: decryptedURL)
