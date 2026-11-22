@@ -27,15 +27,16 @@ final class NCAIVFCSuperblockTests: XCTestCase {
     }
 
     func testRejectsTamperedRomFSData() throws {
-        var fixture = try makeFixture()
+        let fixture = try makeFixture()
         defer { try? FileManager.default.removeItem(at: fixture.url) }
-        fixture.section[0x620] ^= 0xFF
-        try fixture.section.write(to: fixture.url)
+        var tampered = fixture.section
+        tampered[0x620] ^= 0xFF
+        try tampered.write(to: fixture.url)
         let superblock = try NCAIVFCSuperblock(hashData: fixture.hashData,
-                                                sectionSize: UInt64(fixture.section.count))
+                                                sectionSize: UInt64(tampered.count))
         XCTAssertThrowsError(try NCAIVFCVerifier.verify(
             decryptedSectionURL: fixture.url,
-            sectionSize: UInt64(fixture.section.count),
+            sectionSize: UInt64(tampered.count),
             superblock: superblock
         )) { error in
             XCTAssertEqual(error as? NCAIVFCVerifierError,
@@ -107,7 +108,7 @@ final class NCAIVFCSuperblockTests: XCTestCase {
             return Data(SHA256.hash(data: padded))
         }
 
-        let level4 = hashBlock(romFS) + hashBlock(Data())
+        let level4 = hashBlock(romFS.prefix(blockSize)) + hashBlock(romFS.suffix(romFS.count - blockSize))
         section.replaceSubrange(Int(offsets[4])..<(Int(offsets[4]) + level4.count), with: level4)
         let level3 = hashBlock(level4)
         section.replaceSubrange(Int(offsets[3])..<(Int(offsets[3]) + level3.count), with: level3)
