@@ -22,7 +22,7 @@ final class NCASectionStreamDecryptorTests: XCTestCase {
             chunkSize: 0x523
         )
 
-        XCTAssertEqual(count, fixture.plainSection.count)
+        XCTAssertEqual(count, UInt64(fixture.plainSection.count))
         XCTAssertEqual(try Data(contentsOf: output), fixture.plainSection)
         XCTAssertEqual(try Data(contentsOf: fixture.inputURL), fixture.encryptedFile)
     }
