@@ -6,10 +6,7 @@ import XCTest
 final class NCASectionRomFSExtractorTests: XCTestCase {
     func testExtractsStandaloneRomFSOnlyAfterFullIVFCVerification() throws {
         let fixture = try makeFixture()
-        defer {
-            try? FileManager.default.removeItem(at: fixture.sectionURL)
-            try? FileManager.default.removeItem(at: fixture.outputURL)
-        }
+        defer { try? FileManager.default.removeItem(at: fixture.directoryURL) }
 
         let result = try NCASectionRomFSExtractor.extract(
             decryptedSectionURL: fixture.sectionURL,
@@ -44,6 +41,7 @@ final class NCASectionRomFSExtractorTests: XCTestCase {
     }
 
     private struct Fixture {
+        let directoryURL: URL
         let sectionURL: URL
         let outputURL: URL
         let section: Data
@@ -134,10 +132,13 @@ final class NCASectionRomFSExtractorTests: XCTestCase {
             expectedHash: expectedHash
         )
 
-        let sectionURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        let outputURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let directoryURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("NCASectionRomFSExtractorTests-\\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: false)
+        let sectionURL = directoryURL.appendingPathComponent("decrypted-section.bin")
+        let outputURL = directoryURL.appendingPathComponent("RomFS.img")
         try section.write(to: sectionURL)
-        return Fixture(sectionURL: sectionURL, outputURL: outputURL,
+        return Fixture(directoryURL: directoryURL, sectionURL: sectionURL, outputURL: outputURL,
                        section: section, romFS: romFS, fileSystemHeader: fsHeader)
     }
 
