@@ -44,3 +44,84 @@ The iBuilder workspace declares MIT licensing. Any vendored crate must retain it
 - Do not replace Box3's NCA decryptor with a claim that iBuilder implements the same path.
 - Do not claim BC CPU decoding is proven on the iPhone 14 based on source inspection alone.
 - Do not make game conversion run automatically on repository commits.
+
+
+## Runtime and game-IPA architecture audit (2026-11-22)
+
+The iBuilder architecture documentation adds an important finding that changes
+the integration order: a rewritten NSO is not itself a playable iOS game. A
+complete game build requires a compatible engine host, shader library, framework
+assembly, signing/export handling, and a player-mode app bundle.
+
+The documented iBuilder chain is:
+
+1. Read the game container and derive the per-game profile.
+2. Rewrite the required ARM64 modules and emit the associated fixup/site/gate
+   tables.
+3. Split and translate shaders, then build the per-game Metal shader library.
+4. Graft the rewritten modules onto a prebuilt nxnative/NX2Apple host dylib to
+   produce `DmGameProbe.framework`, then sign the framework.
+5. Export a player-mode app bundle containing the framework, shader library,
+   profile/runtime data, rewrite tables, and game metadata; the app boots the
+   framework in-process.
+
+Relevant upstream sources at the audited v0.1.2 tag:
+
+- `docs/ARCHITECTURE.md`: end-to-end chain, host responsibilities, Documents
+  layout, and exported-game IPA layout.
+- `docs/reference/pipeline.md`: stage driver, adapters, C ABI, memory/thermal
+  gates, and boot-only state machine.
+- `docs/reference/assemble-sign-pack.md`: `ibuilder-macho`,
+  `ibuilder-sign`, and `ibuilder-pack` responsibilities and limitations.
+- `crates/ibuilder-pipeline`: chain orchestration and the adapter contracts.
+- `crates/ibuilder-macho`: linker-less Mach-O framework assembler.
+- `crates/ibuilder-sign`: ad-hoc framework signature implementation.
+- `crates/ibuilder-pack`: `.nxgame` package writer; this is not by itself an
+  iOS IPA exporter.
+- `app/gameapp` and `app/gameapp_shim_rust.c`: app/player integration and
+  platform callbacks.
+
+### Consequences for Swapp
+
+- Swapp's current diagnostic IPA proves only that the Swapp shell installs and
+  opens. It is not evidence that a game framework can be assembled or booted.
+- Swapp's current NCA/NSP and NSO stages are only part of the chain. The missing
+  runtime host and shader pipeline are critical dependencies, not optional
+  packaging polish.
+- The user's required output is the **Full** export: all game runtime files,
+  shader data, rewrite tables, and RomFS must be inside one self-contained IPA.
+  iBuilder also documents a Light export with RomFS beside the IPA; that format
+  does not meet this project's requirement.
+- The assembler source alone cannot create a playable game: it needs the exact
+  compatible prebuilt host dylib and the complete matching rewritten module
+  outputs. Its own documentation says the Rust-assembled framework has not
+  been booted in its repository's tests.
+- iBuilder's ad-hoc framework signature is not the same as signing the final
+  app bundle. The final IPA must be suitable for SideStore to re-sign and
+  install, and the framework must load under iOS code-signing rules.
+- iBuilder's BC fallback patch 0096 explicitly says it was not tested on a
+  device or simulator; patch-application/host-harness results are not proof of
+  BC decoding on an A15 iPhone. Keep the known-good NXNative BC fallback
+  profile as the device acceptance target rather than assuming iBuilder's
+  fallback is ready.
+
+### Revised integration order
+
+1. Identify and pin the exact compatible nxnative/NX2Apple host source/build
+   and its required runtime data. Verify licensing and whether a reproducible
+   iOS device build is available. Without this, there is no executable game
+   runtime to package.
+2. Map the iBuilder engine host ABI, module/profile/table formats, and
+   shader-library contract against the existing Swapp converter outputs.
+3. Integrate the complete shader split/translate/build stages and the host
+   callbacks they require.
+4. Integrate `ibuilder-macho` and its framework assembly inputs; add structural
+   and byte-parity tests before using it on a real game.
+5. Implement the Full player-IPA exporter and validate every required file is
+   embedded; reject Light/external-RomFS output.
+6. Validate framework signing, SideStore installation, launch, and actual
+   gameplay on the iPhone 14. Only then call the first-game milestone complete.
+
+No upstream iBuilder BC patch is accepted as a substitute for the known-good
+iPhone 14 BC path until the complete host has been built and a real game has
+been tested on-device.
