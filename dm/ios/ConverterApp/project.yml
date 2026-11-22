@@ -1,0 +1,33 @@
+name: Box3Converter
+options:
+  deploymentTarget:
+    iOS: "16.0"
+packages:
+  ConverterCore:
+    path: ../ConverterCore
+targets:
+  Box3Converter:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+    dependencies:
+      - package: ConverterCore
+        product: ConverterCore
+    settings:
+      PRODUCT_BUNDLE_IDENTIFIER: org.box3.converter
+      PRODUCT_NAME: Box3Converter
+      SWIFT_VERSION: "5.0"
+      TARGETED_DEVICE_FAMILY: "1,2"
+      GENERATE_INFOPLIST_FILE: YES
+      INFOPLIST_KEY_CFBundleDisplayName: Box3 Converter
+      INFOPLIST_KEY_UIFileSharingEnabled: YES
+      INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace: YES
+      CODE_SIGN_STYLE: Manual
+      CODE_SIGNING_ALLOWED: NO
+      ENABLE_BITCODE: NO
+schemes:
+  Box3Converter:
+    build:
+      targets:
+        Box3Converter: all
