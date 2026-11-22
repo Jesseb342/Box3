@@ -26,6 +26,25 @@ final class NCAIVFCSuperblockTests: XCTestCase {
         XCTAssertEqual(result.verifiedBlockCount, 7)
     }
 
+    func testVerifiesNonUniformLevelBlockSizesAndZeroPaddedFinalBlock() throws {
+        let fixture = try makeFixture(blockExponents: [6, 7, 6, 8, 7, 6])
+        defer { try? FileManager.default.removeItem(at: fixture.url) }
+
+        let superblock = try NCAIVFCSuperblock(
+            hashData: fixture.hashData,
+            sectionSize: UInt64(fixture.section.count)
+        )
+        XCTAssertEqual(superblock.levels.map(\.blockSizeExponent), [6, 7, 6, 8, 7, 6])
+        let result = try NCAIVFCVerifier.verify(
+            decryptedSectionURL: fixture.url,
+            sectionSize: UInt64(fixture.section.count),
+            superblock: superblock
+        )
+        XCTAssertEqual(result.romFSOffset, 0x600)
+        XCTAssertEqual(result.romFSSize, 0x50)
+        XCTAssertEqual(result.verifiedBlockCount, 7)
+    }
+
     func testRejectsTamperedRomFSData() throws {
         let fixture = try makeFixture()
         defer { try? FileManager.default.removeItem(at: fixture.url) }
@@ -92,33 +111,49 @@ final class NCAIVFCSuperblockTests: XCTestCase {
         let hashData: Data
     }
 
-    private func makeFixture() throws -> Fixture {
+    private func makeFixture(blockExponents: [UInt32] = [6, 6, 6, 6, 6, 6]) throws -> Fixture {
         let offsets: [UInt64] = [0x100, 0x200, 0x300, 0x400, 0x500, 0x600]
         let sizes: [UInt64] = [0x20, 0x20, 0x20, 0x20, 0x40, 0x50]
-        let blockSize = 64
+        guard blockExponents.count == 6 else { throw NSError(domain: "IVFC fixture", code: 1) }
+        let offsets: [UInt64] = [0x100, 0x200, 0x300, 0x400, 0x500, 0x600]
         var section = Data(repeating: 0, count: 0x800)
         let romFS = Data((0..<0x50).map { UInt8(($0 * 13 + 9) & 0xFF) })
-        section.replaceSubrange(Int(offsets[5])..<(Int(offsets[5]) + romFS.count), with: romFS)
+        var levelData = Array(repeating: Data(), count: 6)
+        levelData[5] = romFS
 
-        func hashBlock(_ data: Data) -> Data {
-            var padded = data
-            if padded.count < blockSize {
-                padded.append(Data(repeating: 0, count: blockSize - padded.count))
+        // Match hactool's full-block SHA-256 rule: the final short block is
+        // zero-filled to the configured block size before hashing.
+        for childIndex in stride(from: 5, through: 1, by: -1) {
+            let blockSize = 1 << Int(blockExponents[childIndex])
+            let child = levelData[childIndex]
+            var hashes = Data()
+            var cursor = 0
+            while cursor < child.count {
+                let end = min(cursor + blockSize, child.count)
+                var block = child.subdata(in: cursor..<end)
+                if block.count < blockSize {
+                    block.append(Data(repeating: 0, count: blockSize - block.count))
+                }
+                hashes.append(Data(SHA256.hash(data: block)))
+                cursor = end
             }
-            return Data(SHA256.hash(data: padded))
+            levelData[childIndex - 1] = hashes
         }
 
-        let level4 = hashBlock(romFS.prefix(blockSize)) + hashBlock(romFS.suffix(romFS.count - blockSize))
-        section.replaceSubrange(Int(offsets[4])..<(Int(offsets[4]) + level4.count), with: level4)
-        let level3 = hashBlock(level4)
-        section.replaceSubrange(Int(offsets[3])..<(Int(offsets[3]) + level3.count), with: level3)
-        let level2 = hashBlock(level3)
-        section.replaceSubrange(Int(offsets[2])..<(Int(offsets[2]) + level2.count), with: level2)
-        let level1 = hashBlock(level2)
-        section.replaceSubrange(Int(offsets[1])..<(Int(offsets[1]) + level1.count), with: level1)
-        let level0 = hashBlock(level1)
-        section.replaceSubrange(Int(offsets[0])..<(Int(offsets[0]) + level0.count), with: level0)
-        let master = hashBlock(level0)
+        for index in 0..<6 {
+            let data = levelData[index]
+            section.replaceSubrange(
+                Int(offsets[index])..<(Int(offsets[index]) + data.count),
+                with: data
+            )
+        }
+
+        let masterBlockSize = 1 << Int(blockExponents[0])
+        var masterBlock = levelData[0]
+        if masterBlock.count < masterBlockSize {
+            masterBlock.append(Data(repeating: 0, count: masterBlockSize - masterBlock.count))
+        }
+        let master = Data(SHA256.hash(data: masterBlock))
 
         var hashData = Data(repeating: 0, count: 0xF8)
         put32(0x43465649, at: 0, in: &hashData)
@@ -128,8 +163,8 @@ final class NCAIVFCSuperblockTests: XCTestCase {
         for index in 0..<6 {
             let at = 0x10 + index * 0x18
             put64(offsets[index], at: at, in: &hashData)
-            put64(sizes[index], at: at + 8, in: &hashData)
-            put32(6, at: at + 0x10, in: &hashData)
+            put64(UInt64(levelData[index].count), at: at + 8, in: &hashData)
+            put32(blockExponents[index], at: at + 0x10, in: &hashData)
         }
         hashData.replaceSubrange(0xC0..<0xE0, with: master)
 
