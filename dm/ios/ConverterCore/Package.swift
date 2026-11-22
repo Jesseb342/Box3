@@ -6,6 +6,9 @@ let packageRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
 let rustIOSLibrary = packageRoot
     .appendingPathComponent("../Rust/target/aarch64-apple-ios/release")
     .standardizedFileURL.path
+let rustHostLibrary = packageRoot
+    .appendingPathComponent("../Rust/target/release")
+    .standardizedFileURL.path
 
 let package = Package(
     name: "ConverterCore",
@@ -23,7 +26,8 @@ let package = Package(
             path: "Sources/Box3NSOBridge",
             publicHeadersPath: "include",
             linkerSettings: [
-                .unsafeFlags(["-L\(rustIOSLibrary)", "-lbox3_nso_bridge"], .when(platforms: [.iOS]))
+                .unsafeFlags(["-L\(rustIOSLibrary)", "-lbox3_nso_bridge"], .when(platforms: [.iOS])),
+                .unsafeFlags(["-L\(rustHostLibrary)", "-lbox3_nso_bridge"], .when(platforms: [.macOS]))
             ]
         ),
         .target(
