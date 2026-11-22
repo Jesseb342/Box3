@@ -15,6 +15,11 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 20
     steps:
+      - name: Check out Swapp assembler sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
       - name: Download the pinned official iBuilder release
         shell: bash
         run: |
@@ -95,7 +100,29 @@ jobs:
           EOF
           cat "$WORK/out/HOST-MANIFEST.txt"
 
-      - name: Upload verified host input
+      - name: Assemble synthetic modules onto the candidate host
+        shell: bash
+        run: |
+          set -euo pipefail
+          WORK="$RUNNER_TEMP/swapp-host"
+          HOST="$WORK/out/host-prebuilt-loadable-ios.dylib"
+          OUTPUT="$WORK/out/synthetic-DmGameProbe.framework.dylib"
+          cargo run --manifest-path dm/ios/Rust/Cargo.toml -p ibuilder-macho --example assemble_host_candidate -- "$HOST" "$OUTPUT" "sw" "main" "sdk" "subsdk0"
+          test -s "$OUTPUT"
+          lipo "$OUTPUT" -verify_arch arm64
+          file "$OUTPUT"
+          otool -hv "$OUTPUT"
+          otool -l "$OUTPUT" > "$WORK/assembled-load-commands.txt"
+          grep -q "__dmswmainx0" "$WORK/assembled-load-commands.txt"
+          grep -q "__dmswsdkx0" "$WORK/assembled-load-commands.txt"
+          grep -q "__dmswsubsdk0x0" "$WORK/assembled-load-commands.txt"
+          nm -gU "$OUTPUT" > "$WORK/assembled-symbols.txt"
+          for symbol in dm_host_probe_boot dm_front_set_layer nvn_live_set nvn_live_ready; do
+            grep -qE " [A-Za-z] _${symbol}$" "$WORK/assembled-symbols.txt" || { echo "::error::Assembled framework lost required host export: $symbol"; exit 1; }
+          done
+          echo "Synthetic assembly output validated. This proves the assembler can lay out modules on this host; it does not prove a game-specific framework boots."
+
+      - name: Upload verified host input and synthetic assembly
         uses: actions/upload-artifact@v4
         with:
           name: Swapp-iOS-Host-Candidate
