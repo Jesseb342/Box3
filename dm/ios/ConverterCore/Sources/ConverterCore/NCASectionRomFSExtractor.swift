@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 public enum NCASectionRomFSExtractorError: Error, Equatable {
     case invalidFileURL
@@ -146,7 +147,17 @@ public enum NCASectionRomFSExtractor {
             // Structural parsing is an additional check; IVFC verification above
             // remains the cryptographic integrity prerequisite.
             let archive = try RomFSArchive(url: stagingURL)
-            try manager.moveItem(at: stagingURL, to: destinationURL)
+            // Publish with a same-volume atomic rename. FileManager.moveItem can
+            // surface a cleanup error after the destination has already been copied;
+            // rename keeps publication atomic and avoids a partially visible image.
+            let renameResult = stagingURL.path.withCString { source in
+                destinationURL.path.withCString { destination in
+                    Darwin.rename(source, destination)
+                }
+            }
+            guard renameResult == 0 else {
+                throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+            }
             return Result(
                 outputURL: destinationURL,
                 imageSize: verified.romFSSize,
