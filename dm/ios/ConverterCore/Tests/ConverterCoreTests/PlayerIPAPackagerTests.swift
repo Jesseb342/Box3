@@ -22,6 +22,7 @@ final class PlayerIPAPackagerTests: XCTestCase {
         XCTAssertNotNil(archive["Payload/Captain Toad.app/ExportedGame/shaders/01009bf0072d4000/library.metallib"])
         XCTAssertNotNil(archive["Payload/Captain Toad.app/ExportedGame/documents/profile.tsv"])
         XCTAssertNil(archive["Captain Toad.romfs"])
+        XCTAssertNil(archive["Payload/Captain Toad.app/prod.keys"])
     }
 
     func testRejectsMissingBundledRomFS() throws {
@@ -32,6 +33,31 @@ final class PlayerIPAPackagerTests: XCTestCase {
             XCTAssertEqual(error as? PlayerIPAPackagerError, .missingRomFS)
         }
         XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.ipa.path))
+    }
+
+    func testRejectsKeyMaterialInsideAppBundle() throws {
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.root) }
+        try Data("secret".utf8).write(to: fixture.app.appendingPathComponent("prod.keys"))
+        XCTAssertThrowsError(try PlayerIPAPackager.package(appURL: fixture.app, outputIPAURL: fixture.ipa)) { error in
+            XCTAssertEqual(error as? PlayerIPAPackagerError, .keyMaterialFound("prod.keys"))
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.ipa.path))
+    }
+
+    func testRejectsBundleIdentifierForDifferentGame() throws {
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.root) }
+        let infoURL = fixture.app.appendingPathComponent("Info.plist")
+        var info = try PropertyListSerialization.propertyList(
+            from: Data(contentsOf: infoURL), options: [], format: nil
+        ) as! [String: Any]
+        info["CFBundleIdentifier"] = "dev.swapp.player.g0000000000000000"
+        let data = try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0)
+        try data.write(to: infoURL)
+        XCTAssertThrowsError(try PlayerIPAPackager.package(appURL: fixture.app, outputIPAURL: fixture.ipa)) { error in
+            XCTAssertEqual(error as? PlayerIPAPackagerError, .invalidBundleIdentity)
+        }
     }
 
     private struct Fixture {
@@ -57,10 +83,14 @@ final class PlayerIPAPackagerTests: XCTestCase {
         try manager.createDirectory(at: shaders, withIntermediateDirectories: true)
         try manager.createDirectory(at: documents, withIntermediateDirectories: true)
         try Data("player".utf8).write(to: app.appendingPathComponent("GameApp"))
-        let plist: [String: Any] = ["CFBundleIdentifier": "dev.swapp.player.game", "CFBundleDisplayName": "Captain Toad"]
+        try Data("host".utf8).write(to: app.appendingPathComponent("host-prebuilt.dylib"))
+        let plist: [String: Any] = ["CFBundleIdentifier": "dev.ibuilder.app.g01009bf0072d4000", "CFBundleDisplayName": "Captain Toad"]
         let plistData = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
         try plistData.write(to: app.appendingPathComponent("Info.plist"))
         try Data("framework".utf8).write(to: framework.appendingPathComponent("DmGameProbe"))
+        let frameworkInfo: [String: Any] = ["CFBundleIdentifier": "dev.ibuilder.app.g01009bf0072d4000.DmGameProbe"]
+        let frameworkInfoData = try PropertyListSerialization.data(fromPropertyList: frameworkInfo, format: .xml, options: 0)
+        try frameworkInfoData.write(to: framework.appendingPathComponent("Info.plist"))
         try Data("module".utf8).write(to: flat.appendingPathComponent("main.patched.bin"))
         try Data("romfs123".utf8).write(to: gameRoot.appendingPathComponent("extract/RomFS.img"))
         try Data("metallib".utf8).write(to: shaders.appendingPathComponent("library.metallib"))
