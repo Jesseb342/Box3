@@ -235,3 +235,70 @@ Mach-O framework bridge.
 **Current evidence:** source and packaging logic are present in NXNative;
 iBuilder documents the dynamic framework model; Swapp has not yet integrated
 either runtime model, and no game IPA has been produced by Swapp.
+
+
+## Binary runtime contract comparison (2026-11-22)
+
+The source-level comparison now confirms that the NXNative executable path and
+the iBuilder framework path are **not interchangeable host binaries**.
+
+### NXNative direct executable contract
+
+At NXNative commit `a3663659342ef43afe1f29909c7c36d0cf7555be`:
+
+- `dm/ios/tools/gen_embed.py` emits assembly that places each rewritten
+  module's x0/W/x1 pieces into custom sections of the final app executable.
+- The iOS loader in `dm/host/loader.c` obtains module sections through
+  `getsectiondata(&_mh_execute_header, ...)`; it is reading sections from
+  the main executable, not loading a separate game framework.
+- `dm/ios/Sources/main.m` configures the app bundle's resource paths and
+  starts `dm_host_preload_start` during application startup.
+- `dm/ios/tools/build_ipa.sh` builds that executable with Xcode and then
+  packs its shader libraries, RomFS, add-on content, and metadata into one IPA.
+
+This route is proven as an upstream build architecture, but it embeds game
+modules at compile time. It does not expose a generic host dylib that the
+current Swapp `ibuilder-macho` bridge can simply consume.
+
+### iBuilder framework contract
+
+At iBuilder v0.1.2:
+
+- `ibuilder-macho` assembles rewritten module sections into a **prebuilt,
+  specially prepared host dylib**, preserving its existing segment layout and
+  using reserved load-command/section space.
+- The app then loads the resulting framework with `dlopen`; the shim resolves
+  host entry points such as `dm_host_probe_boot`.
+- The framework assembler tests include synthetic structural checks and
+  host-oracle comparisons, but the upstream documentation explicitly says the
+  Rust-assembled framework itself has not been booted.
+
+Therefore the newly integrated Swapp Mach-O bridge is a valid implementation
+of the iBuilder framework assembly API, but it is not yet connected to a
+verified host binary. Feeding it the NXNative main executable would be the
+wrong contract and must not be attempted as a shortcut.
+
+### Host build dependency remains explicit
+
+iBuilder's `scripts/build-host.sh` requires an external iOSBuilder worktree,
+including its patched engine tree, `tools/`, `load/`, `paches/`, and
+prebuilt device/simulator `libvpx` and `libdav1d` archives. It applies a
+pinned ordered patch series, builds the device host dylib with the worktree's
+`load/prebuild_loadable.sh`, and validates platform/minimum OS, exports,
+shader-chain marker, and engine patch markers before writing a manifest.
+
+That script is deliberately fail-closed when the worktree or decoder archives
+are missing. The iOSBuilder worktree and decoder archives are not present in
+the public iBuilder v0.1.2 checkout, so the host cannot be reproduced from the
+iBuilder Rust workspace alone.
+
+### Engineering decision
+
+- Keep the Rust Mach-O bridge and tests as the framework-assembly component.
+- Do not treat NXNative's main executable as an iBuilder host dylib.
+- The next blocking task is to establish a lawful, pinned, reproducible source
+  for the iOSBuilder worktree and its decoder archives, then run the upstream
+  host build in CI and publish only a verified device host plus its manifest.
+- If those inputs cannot be obtained reproducibly, reassess the architecture
+  before adding more packaging code. A dummy, simulator, or unverified dylib
+  is not acceptable.
