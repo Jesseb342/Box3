@@ -124,6 +124,11 @@ if [ "$PREPARE_XCODE" = YES ] && [ -n "${DM_ENTITLEMENTS-default}" ]; then
   echo "CODE_SIGN_ENTITLEMENTS = Gen/DmIOS.entitlements" >> Gen/dm.xcconfig
   t "entitlements: $(plutil -convert json -o - Gen/DmIOS.entitlements)"
 fi
+# The Swift package links the Rust NSO bridge for physical iOS builds. Build it before Xcode resolves/links ConverterCore.
+command -v cargo >/dev/null 2>&1 || die "Rust/Cargo is required to build the iOS NSO bridge (install rustup and Cargo)"
+command -v rustup >/dev/null 2>&1 || die "rustup is required to install the aarch64-apple-ios Rust target"
+rustup target add aarch64-apple-ios || die "install Rust target aarch64-apple-ios"
+cargo build --manifest-path "$IOS_SOURCE/Rust/Cargo.toml" --release --target aarch64-apple-ios -p box3-nso-bridge || die "build the Rust NSO bridge for iOS"
 xcodegen generate -q > /dev/null || die "xcodegen"
 # DM_METAL_CAPTURE=1: a development build that may write GPU frame captures (MetalCaptureEnabled; the host's DM_GPU_CAPTURE switch writes them to Documents/gpu_captures)
 if [ "${DM_METAL_CAPTURE:-0}" = 1 ]; then /usr/libexec/PlistBuddy -c "Add :MetalCaptureEnabled bool true" Gen/Info.plist > /dev/null || die "MetalCaptureEnabled"; t "Metal frame capture: enabled (DM_METAL_CAPTURE=1)"; fi
