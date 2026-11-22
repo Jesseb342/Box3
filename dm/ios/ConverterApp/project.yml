@@ -15,12 +15,12 @@ targets:
       - package: ConverterCore
         product: ConverterCore
     settings:
-      PRODUCT_BUNDLE_IDENTIFIER: org.box3.converter
-      PRODUCT_NAME: Box3Converter
+      PRODUCT_BUNDLE_IDENTIFIER: app.swapp.converter
+      PRODUCT_NAME: Swapp
       SWIFT_VERSION: "5.0"
       TARGETED_DEVICE_FAMILY: "1,2"
       GENERATE_INFOPLIST_FILE: YES
-      INFOPLIST_KEY_CFBundleDisplayName: Box3 Converter
+      INFOPLIST_KEY_CFBundleDisplayName: Swapp
       INFOPLIST_KEY_UIFileSharingEnabled: YES
       INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace: YES
       CODE_SIGN_STYLE: Manual
