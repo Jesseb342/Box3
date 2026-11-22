@@ -62,7 +62,10 @@ final class RustNSOLoaderTests: XCTestCase {
         for index in 0..<3 {
             let fileOffset = UInt32(0x100 + index * 0x1000)
             let memoryOffset = UInt32(index * 0x1000)
-            let payload = Data((0..<0x1000).map { UInt8(($0 + index * 17) % 251) })
+            let nop: [UInt8] = [0x1f, 0x20, 0x03, 0xd5]
+            let payload = index == 0
+                ? Data((0..<0x1000).map { nop[$0 % 4] })
+                : Data((0..<0x1000).map { UInt8(($0 + index * 17) % 251) })
             let descriptor = 0x10 + index * 0x10
             put32(fileOffset, into: &image, at: descriptor)
             put32(memoryOffset, into: &image, at: descriptor + 4)
