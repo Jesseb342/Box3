@@ -45,7 +45,9 @@ public enum NCASectionPFS0Extractor {
             ".\(destinationURL.lastPathComponent).extract-\(UUID().uuidString)",
             isDirectory: true
         )
-        guard manager.createDirectory(at: stagingURL, withIntermediateDirectories: false) != nil else {
+        do {
+            try manager.createDirectory(at: stagingURL, withIntermediateDirectories: false)
+        } catch {
             throw NCASectionPFS0ExtractorError.couldNotCreateStagingDirectory
         }
         do {
