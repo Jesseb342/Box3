@@ -1,6 +1,6 @@
 import Foundation
 
-public enum NSORewriteBatchError: Error, Equatable {
+public enum NSOGameModuleBatchProcessorError: Error, Equatable {
     case invalidSourceDirectory
     case invalidOutputDirectory
     case outputInsideSourceDirectory
@@ -41,16 +41,16 @@ public enum NSORewriteBatchProcessor {
         let manager = FileManager.default
         guard exefsDirectory.isFileURL,
               (try? exefsDirectory.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true else {
-            throw NSORewriteBatchError.invalidSourceDirectory
+            throw NSOGameModuleBatchProcessorError.invalidSourceDirectory
         }
-        guard outputDirectory.isFileURL else { throw NSORewriteBatchError.invalidOutputDirectory }
+        guard outputDirectory.isFileURL else { throw NSOGameModuleBatchProcessorError.invalidOutputDirectory }
         let sourcePath = exefsDirectory.standardizedFileURL.path
         let outputPath = outputDirectory.standardizedFileURL.path
         guard outputPath != sourcePath, !outputPath.hasPrefix(sourcePath + "/") else {
-            throw NSORewriteBatchError.outputInsideSourceDirectory
+            throw NSOGameModuleBatchProcessorError.outputInsideSourceDirectory
         }
         guard !manager.fileExists(atPath: outputDirectory.path) else {
-            throw NSORewriteBatchError.invalidOutputDirectory
+            throw NSOGameModuleBatchProcessorError.invalidOutputDirectory
         }
 
         let candidates = try manager.contentsOfDirectory(
@@ -66,20 +66,20 @@ public enum NSORewriteBatchProcessor {
             let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
             guard values.isRegularFile == true, values.isSymbolicLink != true,
                   let size = values.fileSize, size > 0 else {
-                throw NSORewriteBatchError.unreadableModule(url.lastPathComponent)
+                throw NSOGameModuleBatchProcessorError.unreadableModule(url.lastPathComponent)
             }
             guard UInt64(size) <= maximumModuleSize else {
-                throw NSORewriteBatchError.moduleTooLarge(url.lastPathComponent, UInt64(size))
+                throw NSOGameModuleBatchProcessorError.moduleTooLarge(url.lastPathComponent, UInt64(size))
             }
             guard names.insert(name).inserted else {
-                throw NSORewriteBatchError.duplicateModuleName(name)
+                throw NSOGameModuleBatchProcessorError.duplicateModuleName(name)
             }
             selected.append((url, name, UInt64(size)))
         }
-        guard !selected.isEmpty else { throw NSORewriteBatchError.noRecognizedModules }
+        guard !selected.isEmpty else { throw NSOGameModuleBatchProcessorError.noRecognizedModules }
 
         if let gamesDirectory, !gamesDirectory.isFileURL {
-            throw NSORewriteBatchError.invalidSourceDirectory
+            throw NSOGameModuleBatchProcessorError.invalidSourceDirectory
         }
         let parent = outputDirectory.deletingLastPathComponent()
         try manager.createDirectory(at: parent, withIntermediateDirectories: true)
@@ -90,7 +90,7 @@ public enum NSORewriteBatchProcessor {
         do {
             try manager.createDirectory(at: staging, withIntermediateDirectories: false)
         } catch {
-            throw NSORewriteBatchError.couldNotCreateStagingDirectory
+            throw NSOGameModuleBatchProcessorError.couldNotCreateStagingDirectory
         }
 
         do {
