@@ -8,8 +8,8 @@ final class RomFSArchiveTests: XCTestCase {
         let source = try writeTemporary(image)
         defer { try? FileManager.default.removeItem(at: source) }
         let archive = try RomFSArchive(url: source)
-        XCTAssertEqual(archive.entries.map(\.path), ["", "hello.txt", "assets", "assets/data.bin"])
-        XCTAssertEqual(archive.entries.filter { !$0.isDirectory }.map(\.size), [5, 4])
+        XCTAssertEqual(archive.entries.map(\\.path), ["", "hello.txt", "assets", "assets/data.bin"])
+        XCTAssertEqual(archive.entries.filter { !$0.isDirectory }.map(\\.size), [5, 4])
         let destination = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: destination) }
         try archive.extractAll(to: destination, chunkSize: 2)
@@ -27,7 +27,6 @@ final class RomFSArchiveTests: XCTestCase {
 
     func testRejectsUnsafeFileName() throws {
         var image = makeImage()
-        // Root's first file name starts at file table offset + 0x20.
         let nameOffset = Int(read64(image, 56) + 0x20)
         image.replaceSubrange(nameOffset..<(nameOffset + 9), with: Data("../evil\0".utf8))
         let source = try writeTemporary(image)
@@ -46,24 +45,23 @@ final class RomFSArchiveTests: XCTestCase {
                               fileHashOffset, fileHashSize, fileOffset, fileSize, dataOffset] {
             put64(value, into: &data, at: data.count)
         }
-        data.append(contentsOf: [0,0,0,0]) // directory hash buckets
-        // Root directory: parent=0, sibling/children empty, name length 0.
+        data.append(contentsOf: [0,0,0,0])
         append32(0, &data); append32(UInt32.max, &data); append32(0x18, &data)
         append32(0, &data); append32(UInt32.max, &data); append32(0, &data)
-        // Child directory "assets" at 0x18.
         append32(0, &data); append32(UInt32.max, &data); append32(UInt32.max, &data)
         append32(0x2C, &data); append32(UInt32.max, &data); append32(6, &data)
         data.append(contentsOf: "assets".utf8); data.append(contentsOf: [0,0])
-        data.append(contentsOf: [0,0,0,0]) // file hash buckets
-        // Root file hello.txt at 0, sibling empty, data offset 0, size 5.
+        // The declared directory metadata table is 0x40 bytes; the two records
+        // occupy 0x38 bytes, so retain the remaining 8 bytes before fileHash.
+        data.append(contentsOf: [0,0,0,0,0,0,0,0])
+        data.append(contentsOf: [0,0,0,0])
         append32(0, &data); append32(UInt32.max, &data); put64(0, into: &data, at: data.count)
         put64(5, into: &data, at: data.count); append32(UInt32.max, &data); append32(9, &data)
         data.append(contentsOf: "hello.txt".utf8); data.append(contentsOf: [0,0,0])
-        // Child file data.bin at 0x2C, parent dir 0x18, data offset 5.
         append32(0x18, &data); append32(UInt32.max, &data); put64(5, into: &data, at: data.count)
         put64(4, into: &data, at: data.count); append32(UInt32.max, &data); append32(8, &data)
         data.append(contentsOf: "data.bin".utf8)
-        data.append(contentsOf: [0,0,0,0]) // alignment padding
+        data.append(contentsOf: [0,0,0,0])
         data.append(contentsOf: "hello".utf8); data.append(contentsOf: [1,2,3,4])
         return data
     }
