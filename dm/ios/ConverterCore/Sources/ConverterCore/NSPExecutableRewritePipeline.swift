@@ -6,6 +6,7 @@ public enum NSPExecutableRewritePipelineError: Error, Equatable {
     case noNCAEntries
     case noSupportedProgramExeFS
     case couldNotCreateStagingDirectory
+    case invalidStagingPath
 }
 
 public struct NSPExecutableRewriteModuleSet {
@@ -121,10 +122,23 @@ public enum NSPExecutableRewritePipeline {
             })
             try manifest.write(to: staging.appendingPathComponent("manifest.json"), options: [.atomic])
             try manager.moveItem(at: staging, to: outputDirectory)
+            let publishedModuleSets = try moduleSets.map { moduleSet in
+                NSPExecutableRewriteModuleSet(
+                    ncaFileName: moduleSet.ncaFileName,
+                    titleID: moduleSet.titleID,
+                    sectionIndex: moduleSet.sectionIndex,
+                    verifiedPFS0Blocks: moduleSet.verifiedPFS0Blocks,
+                    extractedEntryCount: moduleSet.extractedEntryCount,
+                    modules: moduleSet.modules,
+                    rewrittenModulesDirectory: try Self.rebased(
+                        moduleSet.rewrittenModulesDirectory, from: staging, to: outputDirectory
+                    )
+                )
+            }
             return NSPExecutableRewriteResult(
                 outputDirectory: outputDirectory,
                 ncaCount: archive.ncaEntries.count,
-                moduleSets: moduleSets
+                moduleSets: publishedModuleSets
             )
         } catch {
             try? manager.removeItem(at: staging)
