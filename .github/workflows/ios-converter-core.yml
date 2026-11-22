@@ -11,6 +11,7 @@ on:
     branches: [ios-on-device-converter]
     paths:
       - "dm/ios/ConverterCore/**"
+      - "dm/ios/Rust/**"
       - ".github/workflows/ios-converter-core.yml"
   workflow_dispatch:
 
