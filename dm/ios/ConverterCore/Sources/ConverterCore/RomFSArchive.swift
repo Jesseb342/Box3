@@ -133,7 +133,7 @@ public final class RomFSArchive {
             guard !addOverflow, start >= 0x50, end <= regionSize else {
                 throw RomFSError.invalidRegion(name)
             }
-            guard length > 0 || name == "file data" else {
+            guard length > 0 || name == "file data" || (name == "file metadata table" && parsed.fileSize == 0) else {
                 throw RomFSError.invalidRegion(name)
             }
             if length > 0 {
