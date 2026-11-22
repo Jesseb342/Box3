@@ -38,5 +38,9 @@ jobs:
         run: cargo test --manifest-path dm/ios/Rust/Cargo.toml --workspace
       - name: Build NSO bridge static library for macOS host
         run: cargo build --manifest-path dm/ios/Rust/Cargo.toml --release -p box3-nso-bridge
+      - name: Build NSO bridge for physical iOS devices
+        run: |
+          rustup target add aarch64-apple-ios
+          cargo build --manifest-path dm/ios/Rust/Cargo.toml --release --target aarch64-apple-ios -p box3-nso-bridge
       - name: Run native converter core tests
         run: swift test --package-path dm/ios/ConverterCore
