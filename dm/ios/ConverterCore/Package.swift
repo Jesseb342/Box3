@@ -1,5 +1,11 @@
 // swift-tools-version: 6.2
+import Foundation
 import PackageDescription
+
+let packageRoot = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+let rustIOSLibrary = packageRoot
+    .appendingPathComponent("../Rust/target/aarch64-apple-ios/release")
+    .standardizedFileURL.path
 
 let package = Package(
     name: "ConverterCore",
@@ -13,8 +19,17 @@ let package = Package(
     ],
     targets: [
         .target(
+            name: "Box3NSOBridge",
+            path: "Sources/Box3NSOBridge",
+            publicHeadersPath: "include",
+            linkerSettings: [
+                .unsafeFlags(["-L\(rustIOSLibrary)", "-lbox3_nso_bridge"], .when(platforms: [.iOS]))
+            ]
+        ),
+        .target(
             name: "ConverterCore",
             dependencies: [
+                "Box3NSOBridge",
                 .product(name: "Capstone", package: "libcapstone-spm")
             ]
         ),
