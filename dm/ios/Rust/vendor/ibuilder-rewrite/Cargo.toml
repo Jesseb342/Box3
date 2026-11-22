@@ -17,5 +17,3 @@ memmap2 = { workspace = true }
 regex = { version = "1", default-features = false, features = ["std", "perf"] }
 memchr = "2"
 
-[dev-dependencies]
-ibuilder-testkit = { path = "../ibuilder-testkit" }
