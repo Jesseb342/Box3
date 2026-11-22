@@ -15,8 +15,8 @@ let package = Package(
     dependencies: [.package(url: "https://github.com/Lakr233/libcapstone-spm.git", exact: "0.1.3")],
     targets: [
         .target(name: "Box3NSOBridge", path: "Sources/Box3NSOBridge", publicHeadersPath: "include", linkerSettings: [
-            .unsafeFlags(["-L\(rustIOSLibrary)", "-lbox3_nso_bridge", "-lbox3_rewrite_bridge", "-lbox3_macho_bridge"], .when(platforms: [.iOS])),
-            .unsafeFlags(["-L\(rustHostLibrary)", "-lbox3_nso_bridge", "-lbox3_rewrite_bridge"], .when(platforms: [.macOS]))
+            .unsafeFlags(["-L\\(rustIOSLibrary)", "-lbox3_nso_bridge", "-lbox3_rewrite_bridge", "-lbox3_macho_bridge"], .when(platforms: [.iOS])),
+            .unsafeFlags(["-L\\(rustHostLibrary)", "-lbox3_nso_bridge", "-lbox3_rewrite_bridge", "-lbox3_macho_bridge"], .when(platforms: [.macOS]))
         ]),
         .target(name: "ConverterCore", dependencies: ["Box3NSOBridge", .product(name: "Capstone", package: "libcapstone-spm")]),
         .executableTarget(name: "NCAHeaderReferenceCheck", dependencies: ["ConverterCore"]),
