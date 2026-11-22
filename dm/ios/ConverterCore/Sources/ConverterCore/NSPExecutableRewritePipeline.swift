@@ -110,16 +110,31 @@ public enum NSPExecutableRewritePipeline {
                 throw NSPExecutableRewritePipelineError.noSupportedProgramExeFS
             }
             try manager.removeItem(at: ncaDirectory)
-            let manifest = try JSONEncoder.box3NSPManifest.encode(moduleSets.map {
-                NSPManifestEntry(
-                    ncaFileName: $0.ncaFileName,
-                    titleID: $0.titleID,
-                    sectionIndex: $0.sectionIndex,
-                    verifiedPFS0Blocks: $0.verifiedPFS0Blocks,
-                    extractedEntryCount: $0.extractedEntryCount,
-                    modules: $0.modules
+            let manifest = try JSONEncoder.box3NSPManifest.encode(
+                NSPManifest(
+                    moduleSets: moduleSets.map {
+                        NSPManifestEntry(
+                            ncaFileName: $0.ncaFileName,
+                            titleID: $0.titleID,
+                            sectionIndex: $0.sectionIndex,
+                            verifiedPFS0Blocks: $0.verifiedPFS0Blocks,
+                            extractedEntryCount: $0.extractedEntryCount,
+                            modules: $0.modules
+                        )
+                    },
+                    romFSImages: romFSImages.map {
+                        NSPRomFSManifestEntry(
+                            ncaFileName: $0.ncaFileName,
+                            titleID: $0.titleID,
+                            sectionIndex: $0.sectionIndex,
+                            relativePath: $0.relativePath,
+                            imageSize: $0.imageSize,
+                            verifiedBlockCount: $0.verifiedBlockCount,
+                            entryCount: $0.entryCount
+                        )
+                    }
                 )
-            })
+            )
             try manifest.write(to: staging.appendingPathComponent("manifest.json"), options: [.atomic])
             try manager.moveItem(at: staging, to: outputDirectory)
             let publishedModuleSets = try moduleSets.map { moduleSet in
@@ -135,10 +150,23 @@ public enum NSPExecutableRewritePipeline {
                     )
                 )
             }
+            let publishedRomFSImages = try romFSImages.map { image in
+                NSPRomFSImageSummary(
+                    ncaFileName: image.ncaFileName,
+                    titleID: image.titleID,
+                    sectionIndex: image.sectionIndex,
+                    imageURL: try Self.rebased(image.imageURL, from: staging, to: outputDirectory),
+                    relativePath: image.relativePath,
+                    imageSize: image.imageSize,
+                    verifiedBlockCount: image.verifiedBlockCount,
+                    entryCount: image.entryCount
+                )
+            }
             return NSPExecutableRewriteResult(
                 outputDirectory: outputDirectory,
                 ncaCount: archive.ncaEntries.count,
-                moduleSets: publishedModuleSets
+                moduleSets: publishedModuleSets,
+                romFSImages: publishedRomFSImages
             )
         } catch {
             try? manager.removeItem(at: staging)
@@ -157,6 +185,11 @@ public enum NSPExecutableRewritePipeline {
     }
 }
 
+private struct NSPManifest: Codable {
+    let moduleSets: [NSPManifestEntry]
+    let romFSImages: [NSPRomFSManifestEntry]
+}
+
 private struct NSPManifestEntry: Codable {
     let ncaFileName: String
     let titleID: String
@@ -164,6 +197,16 @@ private struct NSPManifestEntry: Codable {
     let verifiedPFS0Blocks: UInt64
     let extractedEntryCount: Int
     let modules: [NSORewriteBatchModuleSummary]
+}
+
+private struct NSPRomFSManifestEntry: Codable {
+    let ncaFileName: String
+    let titleID: String
+    let sectionIndex: Int
+    let relativePath: String
+    let imageSize: UInt64
+    let verifiedBlockCount: UInt64
+    let entryCount: Int
 }
 
 private extension JSONEncoder {
