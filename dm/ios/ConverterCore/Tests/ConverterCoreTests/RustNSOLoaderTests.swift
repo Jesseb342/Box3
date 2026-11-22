@@ -75,6 +75,16 @@ final class RustNSOLoaderTests: XCTestCase {
             image.replaceSubrange((0xa0 + index * 0x20)..<(0xc0 + index * 0x20), with: digest)
             image.append(payload)
         }
+        // Minimal valid MOD0 + empty eh_frame_hdr/dynamic table for the rewriter's code-range analysis.
+        put32(0x100, into: &image, at: 0x104)
+        image.replaceSubrange(0x200..<0x204, with: Data("MOD0".utf8))
+        put32(0x700, into: &image, at: 0x204)
+        put32(0x100, into: &image, at: 0x210)
+        put32(0x10c, into: &image, at: 0x214)
+        image.replaceSubrange(0x300..<0x304, with: Data([1, 3, 3, 3]))
+        put32(0, into: &image, at: 0x304)
+        put32(0, into: &image, at: 0x308)
+        image.replaceSubrange(0x800..<0x810, with: Data(repeating: 0, count: 0x10))
         return image
     }
 
