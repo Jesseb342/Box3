@@ -60,6 +60,73 @@ final class NCAHierarchicalSHA256VerifierTests: XCTestCase {
         }
     }
 
+    func testSectionIntegrityFacadeParsesAndVerifiesPFS0Header() throws {
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.url) }
+        let fsHeader = try makeFileSystemHeader(
+            fileSystemType: .partitionFS, hashType: .hierarchicalSHA256,
+            superblock: fixture.superblock
+        )
+        let result = try NCASectionIntegrityVerifier.verify(
+            decryptedSectionURL: fixture.url, sectionSize: fixture.sectionSize,
+            fileSystemHeader: fsHeader
+        )
+        XCTAssertEqual(result.verifiedBlockCount, 2)
+        XCTAssertEqual(result.pfs0Offset, 0x200)
+    }
+
+    func testSectionIntegrityFacadeRejectsUnsupportedFilesystemAndHashModes() throws {
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.url) }
+        let romFS = try makeFileSystemHeader(
+            fileSystemType: .romFS, hashType: .hierarchicalSHA256,
+            superblock: fixture.superblock
+        )
+        XCTAssertThrowsError(try NCASectionIntegrityVerifier.verify(
+            decryptedSectionURL: fixture.url, sectionSize: fixture.sectionSize,
+            fileSystemHeader: romFS
+        )) {
+            XCTAssertEqual($0 as? NCASectionIntegrityVerifierError, .unsupportedFileSystemType)
+        }
+        let noHash = try makeFileSystemHeader(
+            fileSystemType: .partitionFS, hashType: .none,
+            superblock: fixture.superblock
+        )
+        XCTAssertThrowsError(try NCASectionIntegrityVerifier.verify(
+            decryptedSectionURL: fixture.url, sectionSize: fixture.sectionSize,
+            fileSystemHeader: noHash
+        )) {
+            XCTAssertEqual($0 as? NCASectionIntegrityVerifierError, .unsupportedHashType)
+        }
+    }
+
+    private func makeFileSystemHeader(
+        fileSystemType: NCAFileSystemHeader.FileSystemType,
+        hashType: NCAFileSystemHeader.HashType,
+        superblock: NCAHierarchicalSHA256Superblock
+    ) throws -> NCAFileSystemHeader {
+        var ncaHeader = Data(repeating: 0, count: 0xC00)
+        let offset = 0x400
+        ncaHeader[offset] = 2
+        ncaHeader[offset + 2] = fileSystemType.rawValue
+        ncaHeader[offset + 3] = hashType.rawValue
+        ncaHeader[offset + 4] = NCAFileSystemHeader.EncryptionType.aesCTR.rawValue
+        var hashData = Data(repeating: 0, count: 0xF8)
+        hashData.replaceSubrange(0..<0x20, with: superblock.masterHash)
+        put32(superblock.blockSize, into: &hashData, at: 0x20)
+        put32(2, into: &hashData, at: 0x24)
+        put64(superblock.hashTableOffset, into: &hashData, at: 0x28)
+        put64(superblock.hashTableSize, into: &hashData, at: 0x30)
+        put64(superblock.pfs0Offset, into: &hashData, at: 0x38)
+        put64(superblock.pfs0Size, into: &hashData, at: 0x40)
+        ncaHeader.replaceSubrange((offset + 0x8)..<(offset + 0x100), with: hashData)
+        let raw = ncaHeader.subdata(in: offset..<(offset + 0x200))
+        return try NCAFileSystemHeader(
+            decryptedNCAHeader: ncaHeader, sectionIndex: 0,
+            expectedHash: Data(SHA256.hash(data: raw))
+        )
+    }
+
     private struct Fixture {
         let url: URL
         let sectionSize: UInt64
