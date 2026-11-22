@@ -8,8 +8,8 @@ final class RomFSArchiveTests: XCTestCase {
         let source = try writeTemporary(image)
         defer { try? FileManager.default.removeItem(at: source) }
         let archive = try RomFSArchive(url: source)
-        XCTAssertEqual(archive.entries.map(\\.path), ["", "hello.txt", "assets", "assets/data.bin"])
-        XCTAssertEqual(archive.entries.filter { !$0.isDirectory }.map(\\.size), [5, 4])
+        XCTAssertEqual(archive.entries.map(\.path), ["", "hello.txt", "assets", "assets/data.bin"])
+        XCTAssertEqual(archive.entries.filter { !$0.isDirectory }.map(\.size), [5, 4])
         let destination = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: destination) }
         try archive.extractAll(to: destination, chunkSize: 2)
@@ -51,8 +51,6 @@ final class RomFSArchiveTests: XCTestCase {
         append32(0, &data); append32(UInt32.max, &data); append32(UInt32.max, &data)
         append32(0x2C, &data); append32(UInt32.max, &data); append32(6, &data)
         data.append(contentsOf: "assets".utf8); data.append(contentsOf: [0,0])
-        // The declared directory metadata table is 0x40 bytes; the two records
-        // occupy 0x38 bytes, so retain the remaining 8 bytes before fileHash.
         data.append(contentsOf: [0,0,0,0,0,0,0,0])
         data.append(contentsOf: [0,0,0,0])
         append32(0, &data); append32(UInt32.max, &data); put64(0, into: &data, at: data.count)
