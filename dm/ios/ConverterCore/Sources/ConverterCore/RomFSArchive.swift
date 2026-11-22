@@ -258,7 +258,7 @@ public final class RomFSArchive {
         self.files = output.filter { !$0.isDirectory }
     }
 
-    public func extractAll(to destinationURL: URL, chunkSize: Int = Self.ioChunkSize) throws {
+    public func extractAll(to destinationURL: URL, chunkSize: Int = 1_048_576) throws {
         guard destinationURL.isFileURL, chunkSize > 0, chunkSize <= 8 * 1024 * 1024 else {
             throw RomFSError.invalidFileURL
         }

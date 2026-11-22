@@ -39,8 +39,8 @@ final class RomFSArchiveTests: XCTestCase {
         let dirHashOffset: UInt64 = 0x50, dirHashSize: UInt64 = 4
         let dirOffset: UInt64 = 0x54, dirSize: UInt64 = 0x40
         let fileHashOffset: UInt64 = 0x94, fileHashSize: UInt64 = 4
-        let fileOffset: UInt64 = 0x98, fileSize: UInt64 = 0x48
-        let dataOffset: UInt64 = 0xE0
+        let fileOffset: UInt64 = 0x98, fileSize: UInt64 = 0x54
+        let dataOffset: UInt64 = 0xEC
         var data = Data()
         for value: UInt64 in [0x50, dirHashOffset, dirHashSize, dirOffset, dirSize,
                               fileHashOffset, fileHashSize, fileOffset, fileSize, dataOffset] {
