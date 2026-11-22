@@ -155,7 +155,7 @@ final class NCASectionStreamDecryptorTests: XCTestCase {
         let plainSection = Data((0..<Int(sectionSize)).map { UInt8(($0 * 31 + 7) & 0xFF) })
         let encryptedSection = try NCASectionCTRCrypt.crypt(
             data: plainSection, key: sectionKey, sectionCounter: seed,
-            sectionFileOffset: sectionOffset
+            sectionFileOffset: sectionOffset, offsetWithinSection: 0
         )
         var encryptedFile = Data(repeating: 0xCC, count: fileSize)
         encryptedFile.replaceSubrange(Int(sectionOffset)..<fileSize, with: encryptedSection)
