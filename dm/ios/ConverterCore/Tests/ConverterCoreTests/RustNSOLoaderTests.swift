@@ -24,6 +24,14 @@ final class RustNSOLoaderTests: XCTestCase {
         }
     }
 
+    func testRustRewriteBridgeProcessesValidSyntheticNSO() throws {
+        let rewritten = try RustNSORewriter.rewrite(makeNSO(), moduleName: "rtld")
+        XCTAssertFalse(rewritten.image.isEmpty)
+        XCTAssertGreaterThanOrEqual(rewritten.padTo, rewritten.image.count)
+        XCTAssertTrue(rewritten.fixups.contains("# BUILD_ID\\t"))
+        XCTAssertTrue(rewritten.fixups.contains("# KEY_PAGE_SIZE\\t0x4000"))
+    }
+
     func testRustRewriteBridgeRejectsMalformedNSO() {
         XCTAssertThrowsError(try RustNSORewriter.rewrite(Data("not an NSO".utf8), moduleName: "main"))
     }
