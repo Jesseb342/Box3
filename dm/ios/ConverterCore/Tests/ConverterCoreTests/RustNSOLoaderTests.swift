@@ -1,0 +1,61 @@
+import CryptoKit
+import Foundation
+import XCTest
+@testable import ConverterCore
+
+final class RustNSOLoaderTests: XCTestCase {
+    func testLoadsNSOThroughRustCBridgeAndMatchesSegmentMetadata() throws {
+        let fixture = makeNSO()
+        let inspected = try NSOImage(data: fixture)
+        let loaded = try RustNSOLoader.load(fixture)
+
+        XCTAssertEqual(loaded.bssSize, inspected.bssSize)
+        XCTAssertEqual(Array(loaded.buildID.prefix(16)), Array(inspected.buildID))
+        XCTAssertEqual(loaded.buildID.count, 32)
+        XCTAssertEqual(loaded.segments.map(\.offset), [0, 0x1000, 0x2000])
+        XCTAssertEqual(loaded.segments.map(\.size), [0x1000, 0x1000, 0x1000])
+        XCTAssertEqual(loaded.image.count, 0x3000)
+
+        for index in 0..<3 {
+            let start = 0x100 + index * 0x1000
+            let expected = fixture.subdata(in: start..<(start + 0x1000))
+            let offset = index * 0x1000
+            XCTAssertEqual(loaded.image.subdata(in: offset..<(offset + 0x1000)), expected)
+        }
+    }
+
+    func testRustBridgeRejectsSegmentHashMismatch() throws {
+        var fixture = makeNSO()
+        fixture[0x100] ^= 0x80
+        XCTAssertThrowsError(try RustNSOLoader.load(fixture))
+    }
+
+    private func makeNSO() -> Data {
+        var image = Data(repeating: 0, count: 0x100)
+        image.replaceSubrange(0..<4, with: Data("NSO0".utf8))
+        put32(0x38, into: &image, at: 0x0c) // SHA-256 checks for all three segments
+        put32(0x400, into: &image, at: 0x3c)
+        for index in 0..<32 { image[0x40 + index] = UInt8(index + 1) }
+
+        for index in 0..<3 {
+            let fileOffset = UInt32(0x100 + index * 0x1000)
+            let memoryOffset = UInt32(index * 0x1000)
+            let payload = Data((0..<0x1000).map { UInt8(($0 + index * 17) % 251) })
+            let descriptor = 0x10 + index * 0x10
+            put32(fileOffset, into: &image, at: descriptor)
+            put32(memoryOffset, into: &image, at: descriptor + 4)
+            put32(0x1000, into: &image, at: descriptor + 8)
+            put32(0x1000, into: &image, at: 0x60 + index * 4)
+            let digest = Data(SHA256.hash(data: payload))
+            image.replaceSubrange((0xa0 + index * 0x20)..<(0xc0 + index * 0x20), with: digest)
+            image.append(payload)
+        }
+        return image
+    }
+
+    private func put32(_ value: UInt32, into data: inout Data, at offset: Int) {
+        var littleEndian = value.littleEndian
+        let bytes = withUnsafeBytes(of: &littleEndian) { Array($0) }
+        data.replaceSubrange(offset..<(offset + 4), with: bytes)
+    }
+}
