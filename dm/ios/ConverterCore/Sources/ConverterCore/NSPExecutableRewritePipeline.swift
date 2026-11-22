@@ -7,6 +7,7 @@ public enum NSPExecutableRewritePipelineError: Error, Equatable {
     case noSupportedProgramExeFS
     case couldNotCreateStagingDirectory
     case invalidStagingPath
+    case unsupportedProgramSection(sectionIndex: Int, fileSystemType: NCAFileSystemHeader.FileSystemType, hashType: NCAFileSystemHeader.HashType, encryptionType: NCAFileSystemHeader.EncryptionType)
 }
 
 public struct NSPExecutableRewriteModuleSet {
@@ -19,10 +20,22 @@ public struct NSPExecutableRewriteModuleSet {
     public let rewrittenModulesDirectory: URL
 }
 
+public struct NSPRomFSImageSummary {
+    public let ncaFileName: String
+    public let titleID: String
+    public let sectionIndex: Int
+    public let imageURL: URL
+    public let relativePath: String
+    public let imageSize: UInt64
+    public let verifiedBlockCount: UInt64
+    public let entryCount: Int
+}
+
 public struct NSPExecutableRewriteResult {
     public let outputDirectory: URL
     public let ncaCount: Int
     public let moduleSets: [NSPExecutableRewriteModuleSet]
+    public let romFSImages: [NSPRomFSImageSummary]
 }
 
 /// NSP -> NCA inventory -> program NCA inspection -> ExeFS section decryption,
@@ -67,6 +80,7 @@ public enum NSPExecutableRewritePipeline {
             try manager.createDirectory(at: ncaDirectory, withIntermediateDirectories: true)
             try manager.createDirectory(at: resultDirectory, withIntermediateDirectories: true)
             var moduleSets: [NSPExecutableRewriteModuleSet] = []
+            var romFSImages: [NSPRomFSImageSummary] = []
 
             for (index, entry) in archive.ncaEntries.enumerated() {
                 let ncaURL = ncaDirectory.appendingPathComponent(String(format: "%04d-%@", index, entry.name))
