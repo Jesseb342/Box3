@@ -81,7 +81,7 @@ final class NCAIVFCSuperblockTests: XCTestCase {
         let fixture = try makeFixture()
         defer { try? FileManager.default.removeItem(at: fixture.url) }
         var bad = fixture.hashData
-        put64(1, at: 0x10 + 0x18 + 8, in: &bad)
+        put64(65, at: 0x10 + 0x18 + 8, in: &bad)
         XCTAssertThrowsError(try NCAIVFCSuperblock(hashData: bad,
                                                     sectionSize: UInt64(fixture.section.count)))
     }
