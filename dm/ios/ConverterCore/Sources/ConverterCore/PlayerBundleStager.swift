@@ -320,8 +320,8 @@ public enum PlayerBundleStager {
     private static func parseTSV(_ data: Data) -> [String: String] {
         guard let text = String(data: data, encoding: .utf8) else { return [:] }
         var values: [String: String] = [:]
-        for line in text.split(whereSeparator: \\ .isNewline) {
-            let parts = line.split(separator: "\\t", maxSplits: 1, omittingEmptySubsequences: false)
+        for line in text.split(whereSeparator: { $0.isNewline }) {
+            let parts = line.split(separator: "\t", maxSplits: 1, omittingEmptySubsequences: false)
             guard parts.count == 2 else { continue }
             values[String(parts[0])] = String(parts[1])
         }
