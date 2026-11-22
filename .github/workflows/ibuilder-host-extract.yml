@@ -43,26 +43,36 @@ jobs:
           HOST="$WORK/out/host-prebuilt-loadable-ios.dylib"
           EXPECTED_SHA="a66bf16265c9d743a30196efb069a595574ccd8d2c9160e1d35dae907be45b52"
           EXPECTED_SIZE="6825256"
-          ACTUAL_SHA="$(shasum -a 256 "$HOST" | awk '{print $1}')"
+          RAW_SHA="$(shasum -a 256 "$HOST" | awk '{print $1}')"
           ACTUAL_SIZE="$(stat -f '%z' "$HOST")"
+          UNSIGNED="$WORK/out/host-prebuilt-loadable-ios-unsigned.dylib"
+          cp "$HOST" "$UNSIGNED"
+          if codesign -dv "$HOST" >/dev/null 2>&1; then
+            codesign --remove-signature "$UNSIGNED"
+            echo "Removed the IPA's embedded Mach-O code signature from the working host copy."
+          else
+            echo "The extracted host has no removable code signature."
+          fi
+          ACTUAL_SHA="$(shasum -a 256 "$UNSIGNED" | awk '{print $1}')"
           if [ "$ACTUAL_SHA" = "$EXPECTED_SHA" ]; then
             PIN_MATCH="yes"
+            echo "Unsigned host matches the exact app/inputs.tsv SHA-256 pin."
           else
             PIN_MATCH="no"
-            echo "::warning::The released IPA host does not match app/inputs.tsv's current host pin. Actual SHA-256: $ACTUAL_SHA; expected: $EXPECTED_SHA. Continuing only to inspect its binary compatibility."
+            echo "::warning::Even after removing any code signature, the released IPA host does not match app/inputs.tsv. Raw SHA-256: $RAW_SHA; unsigned SHA-256: $ACTUAL_SHA; expected: $EXPECTED_SHA. Continuing only to inspect binary compatibility."
           fi
           if [ "$ACTUAL_SIZE" != "$EXPECTED_SIZE" ]; then
-            echo "::warning::Host size differs from app/inputs.tsv: actual $ACTUAL_SIZE; expected $EXPECTED_SIZE."
+            echo "::warning::Raw host size differs from app/inputs.tsv: actual $ACTUAL_SIZE; expected $EXPECTED_SIZE."
           fi
-          lipo "$HOST" -verify_arch arm64
-          PLATFORM="$(otool -l "$HOST" | awk '/LC_BUILD_VERSION/{seen=1;next} seen && /platform/{print $2;exit}')"
-          MINOS="$(otool -l "$HOST" | awk '/LC_BUILD_VERSION/{seen=1;next} seen && /minos/{print $2;exit}')"
+          lipo "$UNSIGNED" -verify_arch arm64
+          PLATFORM="$(otool -l "$UNSIGNED" | awk '/LC_BUILD_VERSION/{seen=1;next} seen && /platform/{print $2;exit}')"
+          MINOS="$(otool -l "$UNSIGNED" | awk '/LC_BUILD_VERSION/{seen=1;next} seen && /minos/{print $2;exit}')"
           test "$PLATFORM" = "2" || { echo "::error::Expected iOS platform 2, got $PLATFORM"; exit 1; }
           test "$MINOS" = "26.0" || { echo "::error::Expected minimum iOS 26.0, got $MINOS"; exit 1; }
           STRINGS="$WORK/host-strings.txt"
           SYMBOLS="$WORK/host-symbols.txt"
-          strings -a "$HOST" > "$STRINGS"
-          nm -gU "$HOST" > "$SYMBOLS"
+          strings -a "$UNSIGNED" > "$STRINGS"
+          nm -gU "$UNSIGNED" > "$SYMBOLS"
           grep -qx "b24b25240cad" "$STRINGS"
           # These four are the host entry points required by the Rust boot path.
           # Touch-pad entry points are optional and older hosts explicitly log when absent.
@@ -84,9 +94,10 @@ jobs:
           Release IPA: GameApp-rust-20261122-144325-rust7d81008a.ipa
           Release IPA SHA-256: 812162fa910190a3dfd52c90d27fbfd5c72e2b4a7a34abb5fc554bc49bbcc9f3
           Extracted path: Payload/GameApp.app/host-prebuilt.dylib
-          Host SHA-256: $ACTUAL_SHA
-          Host size: $ACTUAL_SIZE bytes
-          Matches app/inputs.tsv host pin: $PIN_MATCH (expected SHA-256 $EXPECTED_SHA; expected size $EXPECTED_SIZE bytes)
+          Raw IPA host SHA-256: $RAW_SHA
+          Unsigned host SHA-256: $ACTUAL_SHA
+          Raw host size: $ACTUAL_SIZE bytes
+          Matches app/inputs.tsv host pin after signature removal: $PIN_MATCH (expected SHA-256 $EXPECTED_SHA; expected size $EXPECTED_SIZE bytes)
           Architecture: arm64
           Mach-O platform: $PLATFORM (iOS)
           Minimum iOS: $MINOS
@@ -105,7 +116,7 @@ jobs:
         run: |
           set -euo pipefail
           WORK="$RUNNER_TEMP/swapp-host"
-          HOST="$WORK/out/host-prebuilt-loadable-ios.dylib"
+          HOST="$WORK/out/host-prebuilt-loadable-ios-unsigned.dylib"
           OUTPUT="$WORK/out/synthetic-DmGameProbe.framework.dylib"
           cargo run --manifest-path dm/ios/Rust/Cargo.toml -p ibuilder-macho --example assemble_host_candidate -- "$HOST" "$OUTPUT" "sw" "main" "sdk" "subsdk0"
           test -s "$OUTPUT"
