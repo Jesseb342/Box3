@@ -2,6 +2,10 @@ name: Verify and extract iBuilder iOS host
 
 on:
   workflow_dispatch:
+  push:
+    branches: [ios-on-device-converter]
+    paths:
+      - .github/workflows/ibuilder-host-extract.yml
 
 permissions:
   contents: read
