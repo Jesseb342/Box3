@@ -1,6 +1,6 @@
 import Foundation
 
-public enum NSPPackageRole: String, Codable, CaseIterable {
+public enum NSPPackageRole: String, Codable, CaseIterable, Equatable {
     case base
     case update
     case dlc
