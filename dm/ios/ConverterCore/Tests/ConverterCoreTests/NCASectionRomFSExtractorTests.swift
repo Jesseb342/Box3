@@ -23,10 +23,7 @@ final class NCASectionRomFSExtractorTests: XCTestCase {
 
     func testRejectsTamperedRomFSBeforePublishingOutput() throws {
         let fixture = try makeFixture()
-        defer {
-            try? FileManager.default.removeItem(at: fixture.sectionURL)
-            try? FileManager.default.removeItem(at: fixture.outputURL)
-        }
+        defer { try? FileManager.default.removeItem(at: fixture.directoryURL) }
         var tampered = fixture.section
         tampered[0x290] ^= 0x80
         try tampered.write(to: fixture.sectionURL)
