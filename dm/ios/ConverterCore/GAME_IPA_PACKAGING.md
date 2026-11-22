@@ -1,6 +1,6 @@
 # Swapp: single-game IPA packaging contract
 
-Status: design contract; the packager is not implemented yet.
+Status: player-bundle staging and a ZIP64-capable single-IPA packager are implemented with synthetic tests; full conversion-to-IPA integration and device runtime validation remain outstanding.
 
 Swapp's output is **one self-contained, unsigned IPA per game**. The archive must contain exactly one
 `Payload/<GameName>.app/` tree. No RAR, sidecar archive, split IPA, separately installed RomFS, or
