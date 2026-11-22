@@ -44,6 +44,15 @@ public struct NCAHeader {
     public let rightsID: Data
     public let sections: [Section]
     public let sectionHeaderHashes: [Data]
+    /// Four encrypted 16-byte key slots from NCA header offset 0x300.
+    public let encryptedKeyArea: Data
+
+    /// hactool-compatible key-area generation index: max(crypto_type, crypto_type2) - 1,
+    /// with both encoded values 0 and 1 mapping to master-key generation index zero.
+    public var keyAreaGenerationIndex: UInt8 {
+        let encoded = max(oldKeyGeneration, keyGeneration)
+        return encoded == 0 ? 0 : encoded - 1
+    }
 
     public var usesTitleKeyCrypto: Bool {
         rightsID.contains(where: { $0 != 0 })
@@ -95,6 +104,7 @@ public struct NCAHeader {
             let offset = 0x280 + index * 0x20
             return data.subdata(in: offset..<(offset + 0x20))
         }
+        self.encryptedKeyArea = data.subdata(in: 0x300..<0x340)
     }
 
     private static func u32(_ data: Data, _ offset: Int) -> UInt32 {

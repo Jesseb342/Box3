@@ -55,6 +55,29 @@ public enum AESXTS {
         return plaintext
     }
 
+    /// AES-ECB block transform used for NCA key-area and title-key wrapping.
+    /// Input must contain complete 16-byte blocks; no padding is applied.
+    public static func decryptECB(_ data: Data, key: Data) throws -> Data {
+        try transformECB(data, key: key, encrypting: false)
+    }
+
+    public static func encryptECB(_ data: Data, key: Data) throws -> Data {
+        try transformECB(data, key: key, encrypting: true)
+    }
+
+    private static func transformECB(_ data: Data, key: Data, encrypting: Bool) throws -> Data {
+        guard key.count == 16 || key.count == 32 else { throw AESXTSError.invalidCombinedKeyLength }
+        guard data.count >= 16 else { throw AESXTSError.dataUnitTooShort }
+        guard data.count.isMultiple(of: 16) else { throw AESXTSError.dataUnitNotBlockAligned }
+        var output = Data()
+        output.reserveCapacity(data.count)
+        for offset in stride(from: 0, to: data.count, by: 16) {
+            let block = data.subdata(in: offset..<(offset + 16))
+            output.append(try aesBlock(block, key: key, encrypting: encrypting))
+        }
+        return output
+    }
+
     private static func transform(
         dataUnit: Data,
         combinedKey: Data,
