@@ -1,0 +1,17 @@
+[package]
+name = "ibuilder-rewrite"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+ibuilder-nso = { path = "../ibuilder-nso" }
+ibuilder-a64 = { path = "../ibuilder-a64" }
+sha2 = { workspace = true }
+rayon = { workspace = true }
+memmap2 = { workspace = true }
+regex = { version = "1", default-features = false, features = ["std", "perf"] }
+memchr = "2"
+
+[dev-dependencies]
+ibuilder-testkit = { path = "../ibuilder-testkit" }

@@ -1,0 +1,9 @@
+[package]
+name = "ibuilder-testkit"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[dependencies]
+sha2 = { workspace = true }
+libc = { workspace = true }
