@@ -91,10 +91,16 @@ public final class RomFSArchive {
                 throw RomFSError.truncatedImage
             }
             try handle.seek(toOffset: absolute)
-            guard let data = try handle.read(upToCount: count), data.count == count else {
-                throw RomFSError.truncatedImage
+            var result = Data()
+            result.reserveCapacity(count)
+            while result.count < count {
+                guard let chunk = try handle.read(upToCount: count - result.count),
+                      !chunk.isEmpty else {
+                    throw RomFSError.truncatedImage
+                }
+                result.append(chunk)
             }
-            return data
+            return result
         }
 
         let rawHeader = try read(0, 0x50)
@@ -291,8 +297,14 @@ public final class RomFSArchive {
                         let count = Int(min(UInt64(chunkSize), entry.size - copied))
                         let absolute = imageOffset + header.dataOffset + entry.dataOffset + copied
                         try input.seek(toOffset: absolute)
-                        guard let bytes = try input.read(upToCount: count), bytes.count == count else {
-                            throw RomFSError.truncatedImage
+                        var bytes = Data()
+                        bytes.reserveCapacity(count)
+                        while bytes.count < count {
+                            guard let chunk = try input.read(upToCount: count - bytes.count),
+                                  !chunk.isEmpty else {
+                                throw RomFSError.truncatedImage
+                            }
+                            bytes.append(chunk)
                         }
                         try output.write(contentsOf: bytes)
                         copied += UInt64(count)
