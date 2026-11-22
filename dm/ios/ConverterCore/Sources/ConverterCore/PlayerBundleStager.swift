@@ -15,6 +15,7 @@ public enum PlayerBundleStagerError: Error, Equatable, LocalizedError {
     case emptyRomFS
     case emptyProfile
     case invalidManifest
+    case profileTitleIDMismatch
     case bcFallbackRequired
 
     public var errorDescription: String? {
@@ -31,7 +32,8 @@ public enum PlayerBundleStagerError: Error, Equatable, LocalizedError {
         case .missingShaderFiles: return "The game's shader directory is empty."
         case .emptyRomFS: return "The complete RomFS.img is missing or empty."
         case .emptyProfile: return "The game's profile.tsv is missing or empty."
-        case .invalidManifest: return "The player manifest is empty."
+        case .invalidManifest: return "The player manifest is missing required iBuilder player fields."
+        case .profileTitleIDMismatch: return "The profile title ID does not match the game being packaged."
         case .bcFallbackRequired: return "The iPhone 14 player build must select the proven BC fallback."
         }
     }
@@ -171,6 +173,14 @@ public enum PlayerBundleStager {
             frameworkInfo["CFBundleInfoDictionaryVersion"] = "6.0"
             frameworkInfo["CFBundleShortVersionString"] = "1.0"
             frameworkInfo["CFBundleVersion"] = "1"
+            let appMinimumOS = appInfo["MinimumOSVersion"]
+            if let appMinimumOS { frameworkInfo["MinimumOSVersion"] = appMinimumOS }
+            if let supportedPlatforms = appInfo["CFBundleSupportedPlatforms"] {
+                frameworkInfo["CFBundleSupportedPlatforms"] = supportedPlatforms
+            }
+            if let deviceFamily = appInfo["UIDeviceFamily"] {
+                frameworkInfo["UIDeviceFamily"] = deviceFamily
+            }
             try writePropertyList(frameworkInfo, to: frameworkInfoURL)
 
             let gameRoot = output.appendingPathComponent(exportedGameFolder, isDirectory: true)
@@ -229,8 +239,17 @@ public enum PlayerBundleStager {
         guard request.bcFallbackEnabled else {
             throw PlayerBundleStagerError.bcFallbackRequired
         }
-        guard request.playerManifest.count > 0 else {
+        let manifest = parseTSV(request.playerManifest)
+        let requiredManifestFields = ["title_id", "dump", "name", "app_build", "exported"]
+        guard requiredManifestFields.allSatisfy({ !(manifest[$0] ?? "").isEmpty }),
+              manifest["title_id"]?.lowercased() == request.titleID,
+              manifest["name"] == request.displayName else {
             throw PlayerBundleStagerError.invalidManifest
+        }
+        let profileData = try Data(contentsOf: request.profileURL)
+        let profile = parseTSV(profileData)
+        guard profile["title_id"]?.lowercased() == request.titleID else {
+            throw PlayerBundleStagerError.profileTitleIDMismatch
         }
         guard request.expectedHostSHA256.count == 64,
               request.expectedHostSHA256.allSatisfy({ $0.isHexDigit }) else {
@@ -296,6 +315,17 @@ public enum PlayerBundleStager {
         for url in removals.sorted(by: { $0.path.count > $1.path.count }) {
             try fileManager.removeItem(at: url)
         }
+    }
+
+    private static func parseTSV(_ data: Data) -> [String: String] {
+        guard let text = String(data: data, encoding: .utf8) else { return [:] }
+        var values: [String: String] = [:]
+        for line in text.split(whereSeparator: \\ .isNewline) {
+            let parts = line.split(separator: "\\t", maxSplits: 1, omittingEmptySubsequences: false)
+            guard parts.count == 2 else { continue }
+            values[String(parts[0])] = String(parts[1])
+        }
+        return values
     }
 
     private static func readPropertyList(at url: URL) throws -> [String: Any] {
