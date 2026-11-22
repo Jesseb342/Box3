@@ -96,7 +96,7 @@ final class PlayerBundleStagerTests: XCTestCase {
             romFSURL: fixture.romFS,
             shadersURL: fixture.shaders,
             profileURL: fixture.profile,
-            playerManifest: Data("dump\tfixture.nsp\n".utf8),
+            playerManifest: Data("title_id\t01009bf0072d4000\ndump\tCaptainToad.nsp\nname\tCaptain Toad\napp_build\tswapp-test\nexported\t2026-11-22T00:00:00Z\n".utf8),
             titleID: "01009bf0072d4000",
             displayName: "Captain Toad",
             outputAppURL: fixture.output,
@@ -118,7 +118,7 @@ final class PlayerBundleStagerTests: XCTestCase {
             romFSURL: fixture.romFS,
             shadersURL: fixture.shaders,
             profileURL: fixture.profile,
-            playerManifest: Data("dump\tfixture.nsp\n".utf8),
+            playerManifest: Data("title_id\t01009bf0072d4000\ndump\tCaptainToad.nsp\nname\tCaptain Toad\napp_build\tswapp-test\nexported\t2026-11-22T00:00:00Z\n".utf8),
             titleID: "01009bf0072d4000",
             displayName: "Captain Toad",
             outputAppURL: fixture.output,
@@ -161,7 +161,7 @@ final class PlayerBundleStagerTests: XCTestCase {
         try Data("module".utf8).write(to: modules.appendingPathComponent("main.patched.bin"))
         try Data("romfs123".utf8).write(to: romFS)
         try Data("shader".utf8).write(to: shaders.appendingPathComponent("library.metallib"))
-        try Data("title_id\\t01009bf0072d4000\\n".utf8).write(to: profile)
+        try Data("title_id\t01009bf0072d4000\n".utf8).write(to: profile)
 
         let hostHash = SHA256.hash(data: Data("host-runtime".utf8))
             .map { String(format: "%02x", $0) }.joined()
