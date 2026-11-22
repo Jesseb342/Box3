@@ -181,3 +181,57 @@ Until this is resolved, host integration is marked **blocked on reproducible
 host provenance/build inputs**. Do not substitute a dummy dylib, a simulator
 host, or an unverified prebuilt. The user-facing game IPA milestone remains
 unmet.
+
+
+## NXNative host source cross-check (2026-11-22)
+
+The host audit was extended to the public NXNative source at
+`seedds/nxnative`, commit
+`a3663659342ef43afe1f29909c7c36d0cf7555be` (the exact base revision named
+by iBuilder's host-build script).
+
+This changes the conclusion slightly: the engine source itself is available in
+the NXNative repository. Its tree includes `dm/host/`, `dm/ios/tools/`,
+`dm/gfx/tools/`, the native loader, and the iOS packaging scripts. In
+particular:
+
+- `dm/ios/tools/build_ipa.sh` generates an Xcode project, builds the iOS
+  executable, and packages the game resources into one IPA.
+- `dm/ios/tools/gen_embed.py` places rewritten NSO module images into
+  Mach-O sections consumed by the native loader.
+- `dm/ios/tools/pack_ipa.py` packs the app, shader library, add-on content,
+  and RomFS directly into one IPA. Its default mode includes the RomFS; the
+  optional `DM_COPY_ROMFS=NO` mode explicitly does not meet Swapp's
+  self-contained-output requirement.
+- The build validates rewritten module tables, game profile, RomFS marker,
+  shader-chain stamp, and required shader libraries before packaging.
+
+There are therefore two different host integration strategies, and they must
+not be conflated:
+
+| Strategy | Runtime model | Main integration issue |
+|---|---|---|
+| NXNative direct executable | Host C sources and rewritten NSOs are compiled/embedded into a game-specific app executable; resources are packed beside it | Existing pipeline is a Mac/Xcode build, so it is not a drop-in on-device converter |
+| iBuilder player framework | A prebuilt host dylib is combined with rewritten modules into `DmGameProbe.framework`; the player app loads it at runtime | iBuilder's host build script expects an iOSBuilder worktree and decoder archives not shipped in iBuilder |
+
+### Updated recommendation
+
+Use NXNative as the authoritative reference for the known working engine, shader
+and all-in-one IPA behavior. Use iBuilder's Rust crates for reusable on-device
+format/rewrite/assembly work only where their input/output contracts match.
+Do not make Swapp depend on iBuilder's undocumented external build worktree if
+the required host can instead be built reproducibly from the pinned public
+NXNative source.
+
+The next implementation investigation is to compare the two runtime models at
+the binary boundary: the NXNative loader's embedded-section contract versus
+iBuilder's framework host ABI and the existing Swapp Rust rewrite outputs.
+Specifically determine whether Swapp can ship a prebuilt, generic NXNative host
+and feed it per-game rewritten modules/resources at runtime, or whether a
+framework assembled on-device is required. This decision controls whether
+the next code task is a reusable host build/export workflow or the iBuilder
+Mach-O framework bridge.
+
+**Current evidence:** source and packaging logic are present in NXNative;
+iBuilder documents the dynamic framework model; Swapp has not yet integrated
+either runtime model, and no game IPA has been produced by Swapp.
