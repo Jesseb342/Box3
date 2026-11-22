@@ -39,8 +39,8 @@ final class RomFSArchiveTests: XCTestCase {
         let dirHashOffset: UInt64 = 0x50, dirHashSize: UInt64 = 4
         let dirOffset: UInt64 = 0x54, dirSize: UInt64 = 0x40
         let fileHashOffset: UInt64 = 0x94, fileHashSize: UInt64 = 4
-        let fileOffset: UInt64 = 0x98, fileSize: UInt64 = 0x54
-        let dataOffset: UInt64 = 0xEC
+        let fileOffset: UInt64 = 0x98, fileSize: UInt64 = 0x58
+        let dataOffset: UInt64 = 0xF0
         var data = Data()
         for value: UInt64 in [0x50, dirHashOffset, dirHashSize, dirOffset, dirSize,
                               fileHashOffset, fileHashSize, fileOffset, fileSize, dataOffset] {
@@ -59,7 +59,7 @@ final class RomFSArchiveTests: XCTestCase {
         append32(0, &data); append32(UInt32.max, &data); put64(0, into: &data, at: data.count)
         put64(5, into: &data, at: data.count); append32(UInt32.max, &data); append32(9, &data)
         data.append(contentsOf: "hello.txt".utf8); data.append(contentsOf: [0,0,0])
-        // Child file data.bin at 0x28, parent dir 0x18, data offset 5.
+        // Child file data.bin at 0x2C, parent dir 0x18, data offset 5.
         append32(0x18, &data); append32(UInt32.max, &data); put64(5, into: &data, at: data.count)
         put64(4, into: &data, at: data.count); append32(UInt32.max, &data); append32(8, &data)
         data.append(contentsOf: "data.bin".utf8)
