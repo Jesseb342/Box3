@@ -6,11 +6,12 @@ public enum NCASectionKeyResolverError: Error, Equatable {
     case missingKeyAreaKey(String)
     case invalidKeyAreaKeyLength(Int)
     case invalidEncryptedKeyAreaLength(Int)
+    case missingTitleKey(String)
+    case missingTitleKek(String)
+    case invalidTitleKekLength(Int)
 }
 
-/// Resolves the section CTR key for standard NCA3 crypto from a user's
-/// already-derived prod.keys key-area key. It deliberately does not derive
-/// console/master keys or attempt title-key crypto.
+/// Resolves standard key-area keys and Rights ID title keys from user-provided key files.
 public enum NCASectionKeyResolver {
     public enum KeyArea: UInt8, CaseIterable {
         case application = 0
@@ -26,8 +27,6 @@ public enum NCASectionKeyResolver {
         }
     }
 
-    /// Decrypts the four 16-byte slots in the NCA key area using the exact
-    /// key-area generation and key-area index encoded in the NCA header.
     public static func decryptKeyArea(header: NCAHeader, keys: ProdKeys) throws -> [Data] {
         guard !header.usesTitleKeyCrypto else {
             throw NCASectionKeyResolverError.titleKeyCryptoRequiresTitleKeySupport
@@ -51,6 +50,27 @@ public enum NCASectionKeyResolver {
         }
     }
 
+    /// Resolves the decrypted title key for an NCA carrying a nonzero Rights ID.
+    public static func titleKey(header: NCAHeader, keys: ProdKeys, titleKeys: TitleKeys) throws -> Data {
+        guard header.usesTitleKeyCrypto else {
+            throw NCASectionKeyResolverError.titleKeyCryptoRequiresTitleKeySupport
+        }
+        let rightsName = header.rightsID.map { String(format: "%02x", $0) }.joined()
+        guard let encryptedTitleKey = titleKeys.encryptedTitleKey(for: header.rightsID) else {
+            throw NCASectionKeyResolverError.missingTitleKey(rightsName)
+        }
+        let generation = header.keyAreaGenerationIndex
+        let primaryName = String(format: "titlekek_%02x", generation)
+        let aliasName = String(format: "ticket_commonkey_%02x", generation)
+        guard let titleKek = keys.value(for: primaryName) ?? keys.value(for: aliasName) else {
+            throw NCASectionKeyResolverError.missingTitleKek(primaryName)
+        }
+        guard titleKek.count == 16 else {
+            throw NCASectionKeyResolverError.invalidTitleKekLength(titleKek.count)
+        }
+        return try AESXTS.decryptECB(encryptedTitleKey, key: titleKek)
+    }
+
     /// Standard NCA CTR/BKTR sections use key slot 2 (the third 16-byte slot).
     public static func sectionCTRKey(header: NCAHeader, keys: ProdKeys) throws -> Data {
         let slots = try decryptKeyArea(header: header, keys: keys)
@@ -58,5 +78,13 @@ public enum NCASectionKeyResolver {
             throw NCASectionKeyResolverError.invalidEncryptedKeyAreaLength(header.encryptedKeyArea.count)
         }
         return slots[2]
+    }
+
+    /// Selects title-key crypto when the NCA Rights ID is present, otherwise key-area slot 2.
+    public static func sectionCTRKey(header: NCAHeader, keys: ProdKeys, titleKeys: TitleKeys) throws -> Data {
+        if header.usesTitleKeyCrypto {
+            return try titleKey(header: header, keys: keys, titleKeys: titleKeys)
+        }
+        return try sectionCTRKey(header: header, keys: keys)
     }
 }
