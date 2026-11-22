@@ -49,7 +49,7 @@ jobs:
           if [ "$ACTUAL_SIZE" != "$EXPECTED_SIZE" ]; then
             echo "::warning::Host size differs from app/inputs.tsv: actual $ACTUAL_SIZE; expected $EXPECTED_SIZE."
           fi
-          lipo -verify_arch arm64 "$HOST"
+          lipo "$HOST" -verify_arch arm64
           PLATFORM="$(otool -l "$HOST" | awk '/LC_BUILD_VERSION/{seen=1;next} seen && /platform/{print $2;exit}')"
           MINOS="$(otool -l "$HOST" | awk '/LC_BUILD_VERSION/{seen=1;next} seen && /minos/{print $2;exit}')"
           test "$PLATFORM" = "2" || { echo "::error::Expected iOS platform 2, got $PLATFORM"; exit 1; }
