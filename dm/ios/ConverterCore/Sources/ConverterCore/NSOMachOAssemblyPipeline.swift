@@ -23,7 +23,7 @@ public enum NSOMachOAssemblyPipelineError: Error, LocalizedError, Equatable {
         case .duplicateModuleName(let name): return "The module list contains a duplicate: \(name)."
         case .missingPatchedModule(let name): return "Missing \(name).patched.bin."
         case .missingFixups(let name): return "Missing \(name).fixups.tsv."
-        case .missingGates(let name): return "Missing \\(name).gates.tsv; the iBuilder runtime requires its gate table."
+        case .missingGates(let name): return "Missing \(name).gates.tsv; the iBuilder runtime requires its gate table."
         }
     }
 }
@@ -91,6 +91,8 @@ public enum NSOMachOAssemblyPipeline {
         }
         guard !modules.isEmpty else { throw NSOMachOAssemblyPipelineError.noModules }
 
+        // Validate the complete module list before touching the filesystem. This makes
+        // duplicate/invalid-name errors deterministic even when fixture files are absent.
         var seen = Set<String>()
         for name in modules {
             guard !name.isEmpty,
@@ -100,6 +102,8 @@ public enum NSOMachOAssemblyPipeline {
             guard seen.insert(name).inserted else {
                 throw NSOMachOAssemblyPipelineError.duplicateModuleName(name)
             }
+        }
+        for name in modules {
             let patched = rewrittenModulesDirectory.appendingPathComponent("\(name).patched.bin")
             guard manager.fileExists(atPath: patched.path),
                   (try? patched.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true else {
