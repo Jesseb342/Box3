@@ -5,6 +5,7 @@ on:
     branches: [ios-on-device-converter]
     paths:
       - "dm/ios/ConverterCore/**"
+      - "dm/ios/Rust/**"
       - ".github/workflows/ios-converter-core.yml"
   pull_request:
     branches: [ios-on-device-converter]
@@ -30,3 +31,7 @@ jobs:
           persist-credentials: false
       - name: Run native converter core tests
         run: swift test --package-path dm/ios/ConverterCore
+      - name: Test vendored NSO loader and C ABI bridge
+        run: cargo test --manifest-path dm/ios/Rust/Cargo.toml --workspace
+      - name: Build NSO bridge static library for macOS host
+        run: cargo build --manifest-path dm/ios/Rust/Cargo.toml --release -p box3-nso-bridge
