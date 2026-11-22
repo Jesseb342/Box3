@@ -39,7 +39,9 @@ public final class PFS0Archive {
     private static let maximumStringTableSize: UInt32 = 64 * 1024 * 1024
     private static let copyChunkSize = 8 * 1024 * 1024
 
-    /// Reads a PFS0 archive located inside a larger file. `offset` and `size`\n    /// delimit the exact archive region; trailing bytes outside it are ignored.\n    public init(url: URL, offset: UInt64 = 0, size: UInt64? = nil) throws {
+    /// Reads a PFS0 archive located inside a larger file. `offset` and `size`
+    /// delimit the exact archive region; trailing bytes outside it are ignored.
+    public init(url: URL, offset: UInt64 = 0, size: UInt64? = nil) throws {
         let handle = try FileHandle(forReadingFrom: url)
         defer { try? handle.close() }
 
