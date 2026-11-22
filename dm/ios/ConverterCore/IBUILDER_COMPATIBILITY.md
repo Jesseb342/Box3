@@ -125,3 +125,59 @@ Relevant upstream sources at the audited v0.1.2 tag:
 No upstream iBuilder BC patch is accepted as a substitute for the known-good
 iPhone 14 BC path until the complete host has been built and a real game has
 been tested on-device.
+
+
+## Host availability and reproducibility check (2026-11-22)
+
+A second source-tree check was made against the complete iBuilder v0.1.2 Git tree
+(1,520 tracked paths). It contains the Rust assembler, signer, shader crates,
+app shim, and engine patch series, but **does not contain** a prebuilt
+`host-prebuilt-loadable-ios.dylib`, a vendored nxnative engine tree, or the
+external iOSBuilder build worktree.
+
+The upstream `scripts/build-host.sh` confirms that this is a real dependency,
+not a missing file that can be generated from the iBuilder Rust crates alone.
+It requires all of the following outside the iBuilder checkout:
+
+- `IOSBUILDER_WORKTREE` (or `IOSBUILDER`), containing `out-stage/out-engine/engine`,
+  `tools/`, `load/`, and `paches/`;
+- the matching prebuilt video decoder archives in `out-stage/out-video/`
+  (`libvpx` and `libdav1d`, device and simulator);
+- Xcode's iOS SDK and the exact shader-chain ID expected by the game shader
+  libraries;
+- a pinned base engine and ordered patch set.
+
+The script verifies the generated host's platform/minimum OS, exported symbols,
+shader-chain marker, patch markers, and compatibility with the app shim before
+publishing the dylib. It does not build the shader decoder archives itself.
+Consequently, simply copying `ibuilder-macho` into Swapp or compiling the
+iBuilder Rust workspace cannot produce a runnable game host.
+
+### Existing Box3/NXNative trail
+
+The Box3 branch already has `.github/workflows/NXnative-survey.yml`, an older
+manual Captain Toad IPA workflow that checks out an NXNative revision and calls
+`scripts/build_ipa_from_nsp.py`. This is a useful historical integration lead,
+but it is not the current Swapp on-device workflow and must not be mistaken for
+a verified Swapp build. Its checkout revision must be resolved and checked
+against the actual NXNative repository before reuse.
+
+### Required next engineering action
+
+Before adding more assembler or IPA-export code, establish one reproducible
+source for the host:
+
+1. Resolve the exact NXNative/NX2Apple commit and patch stack that produced the
+   previously working iPhone 14 BC fallback.
+2. Determine whether its complete iOS host build can run from public,
+   pinned sources in GitHub Actions without private/local iOSBuilder artifacts.
+3. If it can, create a separate host-build workflow that outputs a verified
+   device dylib plus a machine-readable manifest (source commits, patch hashes,
+   toolchain, deployment target, exported symbols, shader-chain ID).
+4. If it cannot, identify the smallest missing build inputs and a lawful,
+   reproducible way to obtain them before attempting integration.
+
+Until this is resolved, host integration is marked **blocked on reproducible
+host provenance/build inputs**. Do not substitute a dummy dylib, a simulator
+host, or an unverified prebuilt. The user-facing game IPA milestone remains
+unmet.
