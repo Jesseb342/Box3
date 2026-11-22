@@ -1252,6 +1252,47 @@ mod tests {
     }
 
     #[test]
+    fn game_dir_reads_real_patched_module_and_fixups_files() {
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        let nonce = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let dir = std::env::temp_dir().join(format!("ibuilder-macho-game-dir-{}-{nonce}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let host_path = dir.join("host.dylib");
+        let module_path = dir.join("main.patched.bin");
+        let fixups_path = dir.join("main.fixups.tsv");
+        let output_path = dir.join("assembled.dylib");
+
+        std::fs::write(&host_path, synthetic_host(0x200)).unwrap();
+        // A compact but valid iBuilder layout: x0 = 0..0x4000, W = 0x4000..0x10000,
+        // x1 = 0x10000..0x14000. This exercises Game::Dir/ModuleSource::pieces(),
+        // not the synthetic zero-page shortcut used by the host smoke test.
+        std::fs::write(&module_path, (0..0x14000usize).map(|i| (i % 251) as u8).collect::<Vec<_>>()).unwrap();
+        std::fs::write(
+            &fixups_path,
+            "# PATCH_OFF\t0x10000\n# KEY_PAGE_OFF\t0x8000\n# KEY_PAGE_SIZE\t0x4000\n# TEXT_END\t0x4000\n",
+        ).unwrap();
+
+        let result = assemble_files(
+            &host_path,
+            &output_path,
+            &Game::Dir { dir: dir.clone(), modules: vec!["main".into()] },
+            "",
+        ).unwrap();
+        assert!(result.info.size > std::fs::metadata(&host_path).unwrap().len());
+        let assembled = std::fs::read(&output_path).unwrap();
+        let (_, _, segments) = parse(
+            &assembled[..32 + rd_u32(&assembled, 20).unwrap() as usize]
+        ).unwrap();
+        assert!(segments.iter().any(|s| s.name == "__DMmainW"));
+        let text = segments.iter().find(|s| s.name == "__TEXT").unwrap();
+        assert!(text.secs.iter().any(|s| s.name == "__dmmainx0"));
+        assert!(text.secs.iter().any(|s| s.name == "__dmmainx1"));
+
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
     fn write_is_idempotent_and_deterministic() {
         let host = synthetic_host(0x200);
         let mods = pieces3();
