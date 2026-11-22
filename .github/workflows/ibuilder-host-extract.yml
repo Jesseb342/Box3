@@ -34,6 +34,17 @@ jobs:
           unzip -Z1 "$IPA" | grep -Fx "Payload/GameApp.app/host-prebuilt.dylib"
           unzip -p "$IPA" "Payload/GameApp.app/host-prebuilt.dylib" > "$WORK/out/host-prebuilt-loadable-ios.dylib"
           test -s "$WORK/out/host-prebuilt-loadable-ios.dylib"
+          # Preserve the complete matching player app, not just its host dylib.
+          # The framework must be assembled against the exact host shipped in this player template.
+          mkdir -p "$WORK/out/player-template"
+          unzip -q "$IPA" "Payload/GameApp.app/*" -d "$WORK/out/player-template"
+          TEMPLATE="$WORK/out/player-template/Payload/GameApp.app"
+          test -s "$TEMPLATE/GameApp"
+          test -s "$TEMPLATE/Info.plist"
+          test -s "$TEMPLATE/host-prebuilt.dylib"
+          plutil -lint "$TEMPLATE/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$TEMPLATE/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$TEMPLATE/Info.plist"
 
       - name: Validate the extracted host against the tagged source pins
         shell: bash
@@ -132,6 +143,35 @@ jobs:
             grep -qE " [A-Za-z] _${symbol}$" "$WORK/assembled-symbols.txt" || { echo "::error::Assembled framework lost required host export: $symbol"; exit 1; }
           done
           echo "Synthetic assembly output validated. This proves the assembler can lay out modules on this host; it does not prove a game-specific framework boots."
+
+      - name: Verify player template and framework use the identical host binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          WORK="$RUNNER_TEMP/swapp-host"
+          TEMPLATE="$WORK/out/player-template/Payload/GameApp.app"
+          TEMPLATE_HOST="$TEMPLATE/host-prebuilt.dylib"
+          WORKING_HOST="$WORK/out/host-prebuilt-loadable-ios-unsigned.dylib"
+          TEMPLATE_COPY="$WORK/out/template-host-unsigned.dylib"
+          cp "$TEMPLATE_HOST" "$TEMPLATE_COPY"
+          if codesign -dv "$TEMPLATE_COPY" >/dev/null 2>&1; then codesign --remove-signature "$TEMPLATE_COPY"; fi
+          cmp "$TEMPLATE_COPY" "$WORKING_HOST"
+          TEMPLATE_EXECUTABLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$TEMPLATE/Info.plist")"
+          test -s "$TEMPLATE/$TEMPLATE_EXECUTABLE"
+          TEMPLATE_BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$TEMPLATE/Info.plist")"
+          cat > "$WORK/out/PLAYER-TEMPLATE-MANIFEST.txt" <<EOF
+          Template source: Absenti/iBuilder v0.1.2 official release IPA
+          Release IPA SHA-256: 812162fa910190a3dfd52c90d27fbfd5c72e2b4a7a34abb5fc554bc49bbcc9f3
+          Template app path: player-template/Payload/GameApp.app
+          Bundle identifier: $TEMPLATE_BUNDLE_ID
+          Executable: $TEMPLATE_EXECUTABLE
+          Host path: host-prebuilt.dylib
+          Host identity: exact byte-for-byte match after removing the app's Mach-O signature
+          Host unsigned SHA-256: $(shasum -a 256 "$TEMPLATE_COPY" | awk '{print $1}')
+          Export behavior: full player export embeds ExportedGame/extract/RomFS.img; no slim/external RomFS mode permitted
+          BC status: this template is not accepted as A15-ready until the user's proven NXNative BC fallback is integrated and verified in the complete runtime.
+          EOF
+          cat "$WORK/out/PLAYER-TEMPLATE-MANIFEST.txt"
 
       - name: Upload verified host input and synthetic assembly
         uses: actions/upload-artifact@v4
