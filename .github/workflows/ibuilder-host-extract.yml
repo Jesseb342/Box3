@@ -40,8 +40,15 @@ jobs:
           EXPECTED_SIZE="6825256"
           ACTUAL_SHA="$(shasum -a 256 "$HOST" | awk '{print $1}')"
           ACTUAL_SIZE="$(stat -f '%z' "$HOST")"
-          test "$ACTUAL_SHA" = "$EXPECTED_SHA" || { echo "::error::Host SHA-256 mismatch: $ACTUAL_SHA"; exit 1; }
-          test "$ACTUAL_SIZE" = "$EXPECTED_SIZE" || { echo "::error::Host size mismatch: $ACTUAL_SIZE"; exit 1; }
+          if [ "$ACTUAL_SHA" = "$EXPECTED_SHA" ]; then
+            PIN_MATCH="yes"
+          else
+            PIN_MATCH="no"
+            echo "::warning::The released IPA host does not match app/inputs.tsv's current host pin. Actual SHA-256: $ACTUAL_SHA; expected: $EXPECTED_SHA. Continuing only to inspect its binary compatibility."
+          fi
+          if [ "$ACTUAL_SIZE" != "$EXPECTED_SIZE" ]; then
+            echo "::warning::Host size differs from app/inputs.tsv: actual $ACTUAL_SIZE; expected $EXPECTED_SIZE."
+          fi
           lipo -verify_arch arm64 "$HOST"
           PLATFORM="$(otool -l "$HOST" | awk '/LC_BUILD_VERSION/{seen=1;next} seen && /platform/{print $2;exit}')"
           MINOS="$(otool -l "$HOST" | awk '/LC_BUILD_VERSION/{seen=1;next} seen && /minos/{print $2;exit}')"
@@ -62,6 +69,7 @@ jobs:
           Extracted path: Payload/GameApp.app/host-prebuilt.dylib
           Host SHA-256: $ACTUAL_SHA
           Host size: $ACTUAL_SIZE bytes
+          Matches app/inputs.tsv host pin: $PIN_MATCH (expected SHA-256 $EXPECTED_SHA; expected size $EXPECTED_SIZE bytes)
           Architecture: arm64
           Mach-O platform: $PLATFORM (iOS)
           Minimum iOS: $MINOS
@@ -78,7 +86,7 @@ jobs:
       - name: Upload verified host input
         uses: actions/upload-artifact@v4
         with:
-          name: Swapp-Verified-iOS-Host
+          name: Swapp-iOS-Host-Candidate
           path: ${{ runner.temp }}/swapp-host/out/
           if-no-files-found: error
           retention-days: 7
