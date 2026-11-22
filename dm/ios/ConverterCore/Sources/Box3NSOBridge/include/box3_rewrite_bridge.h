@@ -3,7 +3,7 @@
 #include <stddef.h>
 #include <stdint.h>
 typedef struct Box3RewriteResult Box3RewriteResult;
-int32_t box3_rewrite_nso(const uint8_t *, size_t, const char *, const char *, Box3RewriteResult **, char *, size_t);
+int32_t box3_rewrite_nso(const uint8_t *, size_t, const char *, const char *, const char *, Box3RewriteResult **, char *, size_t);
 const uint8_t *box3_rewrite_image(const Box3RewriteResult *, size_t *);
 const uint8_t *box3_rewrite_patch(const Box3RewriteResult *, size_t *);
 const uint8_t *box3_rewrite_fixups(const Box3RewriteResult *, size_t *);
