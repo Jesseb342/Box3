@@ -33,7 +33,7 @@ final class PFS0ArchiveTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: source) }
 
         let archive = try PFS0Archive(url: source, offset: 0x200, size: UInt64(archiveBytes.count))
-        XCTAssertEqual(archive.entries.map(\\.name), ["program.nso"])
+        XCTAssertEqual(archive.entries.map(\.name), ["program.nso"])
         let output = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: output) }
         try archive.copyEntry(named: "program.nso", to: output)
