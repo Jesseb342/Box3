@@ -51,6 +51,8 @@ public enum NSOMachOAssemblyPipeline {
             modules: modules,
             outputURL: outputURL
         )
+        let parent = outputURL.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
         let assembly = try MachOFrameworkAssembler.assemble(
             hostURL: hostURL,
             outputURL: outputURL,
