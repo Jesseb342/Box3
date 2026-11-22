@@ -15,6 +15,7 @@ public struct NSPExecutableRewriteModuleSet {
     public let verifiedPFS0Blocks: UInt64
     public let extractedEntryCount: Int
     public let modules: [NSORewriteBatchModuleSummary]
+    public let rewrittenModulesDirectory: URL
 }
 
 public struct NSPExecutableRewriteResult {
@@ -98,7 +99,8 @@ public enum NSPExecutableRewritePipeline {
                         sectionIndex: rewritten.sectionIndex,
                         verifiedPFS0Blocks: rewritten.verifiedPFS0Blocks,
                         extractedEntryCount: rewritten.extractedEntryCount,
-                        modules: rewritten.modules
+                        modules: rewritten.modules,
+                        rewrittenModulesDirectory: rewritten.rewrittenModulesDirectory
                     ))
                 }
             }
