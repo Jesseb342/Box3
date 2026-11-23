@@ -7,6 +7,7 @@ public enum NCAExecutableRewritePipelineError: Error, Equatable {
     case unsupportedSectionEncryption(Int)
     case outputAlreadyExists
     case couldNotCreateStagingDirectory
+    case integrityVerificationFailed(String)
 }
 
 public struct NCAExecutableRewriteResult {
@@ -98,6 +99,18 @@ public enum NCAExecutableRewritePipeline {
                 modules: exefs.rewrite.modules,
                 outputDirectory: outputDirectory
             )
+        } catch let error as NCAHierarchicalSHA256VerifierError {
+            try? manager.removeItem(at: staging)
+            if case let .masterHashMismatch(expected, actual, hashOffset, hashSize) = error {
+                let titleID = String(format: "%016llx", inspection.header.titleID)
+                let rightsID = inspection.header.rightsID.map { String(format: "%02x", $0) }.joined()
+                let revision = titleKeys?.masterKeyRevision(for: inspection.header.rightsID)
+                    .map { String(format: "0x%02x", $0) } ?? "unavailable"
+                let ctrSeed = fsHeader.sectionCounter.map { String(format: "%02x", $0) }.joined()
+                let details = "PFS0 master hash mismatch. NCA title ID: \(titleID); Rights ID: \(rightsID); NCA key generation index: \(inspection.header.keyAreaGenerationIndex); ticket master-key revision: \(revision); section index: \(section.index); absolute section offset: 0x\(String(section.byteOffset, radix: 16)); section size: 0x\(String(section.byteSize, radix: 16)); section CTR seed: \(ctrSeed); hash-table offset: 0x\(String(hashOffset, radix: 16)); hash-table size: 0x\(String(hashSize, radix: 16)); expected SHA-256 prefix: \(expected); actual SHA-256 prefix: \(actual). No key bytes are logged."
+                throw NCAExecutableRewritePipelineError.integrityVerificationFailed(details)
+            }
+            throw error
         } catch {
             try? manager.removeItem(at: staging)
             throw error
