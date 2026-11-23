@@ -14,6 +14,7 @@ public enum PFS0Error: Error, Equatable {
     case entryOutsideArchive(String)
     case entryNotFound(String)
     case destinationAlreadyExists(String)
+    case entryTooLarge(String)
 }
 
 /// A bounded, streaming reader for the PFS0 container used by NSP packages.
@@ -143,7 +144,7 @@ public final class PFS0Archive {
     public func readEntryData(named name: String, maximumSize: UInt64 = 1 << 20) throws -> Data {
         guard let entry = entriesByName[name] else { throw PFS0Error.entryNotFound(name) }
         guard entry.size <= maximumSize, entry.size <= UInt64(Int.max) else {
-            throw PFS0Error.unreasonableStringTable
+            throw PFS0Error.entryTooLarge(name)
         }
         let handle = try FileHandle(forReadingFrom: sourceURL)
         defer { try? handle.close() }
