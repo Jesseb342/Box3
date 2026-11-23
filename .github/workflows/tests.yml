@@ -7,6 +7,8 @@ on:
   pull_request:
   push:
     branches: [main, bc-fallback-experiment, bc-compact-fallback, ios-on-device-converter]
+    paths-ignore:
+      - ".github/workflows/**"
   workflow_dispatch:
 
 permissions:
