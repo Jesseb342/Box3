@@ -24,9 +24,9 @@ final class TicketTests: XCTestCase {
         let encrypted = try bytes("00112233445566778899aabbccddeeff")
         for signature: UInt32 in [0x010000, 0x010001, 0x010002, 0x010003, 0x010004, 0x010005, 0x010006] {
             let ticket = try Ticket(data: fixture(signature: signature, keyType: 0, revision: 4, rights: rights, key: encrypted))
-            XCTAssertEqual(ticket.rightsID, rights, "signature type \\(String(signature, radix: 16))")
-            XCTAssertEqual(ticket.encryptedTitleKey, encrypted, "signature type \\(String(signature, radix: 16))")
-            XCTAssertEqual(ticket.masterKeyRevision, 4, "signature type \\(String(signature, radix: 16))")
+            XCTAssertEqual(ticket.rightsID, rights, "signature type \(String(signature, radix: 16))")
+            XCTAssertEqual(ticket.encryptedTitleKey, encrypted, "signature type \(String(signature, radix: 16))")
+            XCTAssertEqual(ticket.masterKeyRevision, 4, "signature type \(String(signature, radix: 16))")
         }
     }
 
@@ -39,7 +39,14 @@ final class TicketTests: XCTestCase {
     }
 
     private func fixture(signature: UInt32, keyType: UInt8, revision: UInt8, rights: Data, key: Data) -> Data {
-        let bodyOffset: Int\n        switch signature {\n        case 0x010000, 0x010003: bodyOffset = 0x240\n        case 0x010001, 0x010004: bodyOffset = 0x140\n        case 0x010002, 0x010005: bodyOffset = 0x80\n        case 0x010006: bodyOffset = 0x40\n        default: fatalError("Unsupported fixture signature")\n        }
+        let bodyOffset: Int
+        switch signature {
+        case 0x010000, 0x010003: bodyOffset = 0x240
+        case 0x010001, 0x010004: bodyOffset = 0x140
+        case 0x010002, 0x010005: bodyOffset = 0x80
+        case 0x010006: bodyOffset = 0x40
+        default: fatalError("Unsupported fixture signature")
+        }
         var data = Data(repeating: 0, count: bodyOffset + 0x2c0)
         data[0] = UInt8(signature & 0xff)
         data[1] = UInt8((signature >> 8) & 0xff)
