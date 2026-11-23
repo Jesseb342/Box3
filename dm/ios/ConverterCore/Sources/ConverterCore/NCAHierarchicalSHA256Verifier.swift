@@ -4,7 +4,7 @@ import CryptoKit
 public enum NCAHierarchicalSHA256VerifierError: Error, Equatable {
     case sectionOutsideFile
     case truncatedData
-    case masterHashMismatch
+    case masterHashMismatch(expectedHashPrefix: String, actualHashPrefix: String, hashTableOffset: UInt64, hashTableSize: UInt64)
     case invalidPFS0Magic
     case blockHashMismatch(UInt64)
     case arithmeticOverflow
@@ -50,7 +50,12 @@ public enum NCAHierarchicalSHA256Verifier {
             length: superblock.hashTableSize
         )
         guard Data(hashDigest) == superblock.masterHash else {
-            throw NCAHierarchicalSHA256VerifierError.masterHashMismatch
+            throw NCAHierarchicalSHA256VerifierError.masterHashMismatch(
+                expectedHashPrefix: Self.hexPrefix(superblock.masterHash),
+                actualHashPrefix: Self.hexPrefix(Data(hashDigest)),
+                hashTableOffset: superblock.hashTableOffset,
+                hashTableSize: superblock.hashTableSize
+            )
         }
 
         try handle.seek(toOffset: pfsStart)
@@ -86,6 +91,10 @@ public enum NCAHierarchicalSHA256Verifier {
             pfs0Offset: superblock.pfs0Offset,
             pfs0Size: superblock.pfs0Size
         )
+    }
+
+    private static func hexPrefix(_ data: Data) -> String {
+        data.prefix(8).map { String(format: "%02x", $0) }.joined()
     }
 
     private static func digest(from handle: FileHandle, offset: UInt64, length: UInt64) throws -> [UInt8] {
