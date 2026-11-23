@@ -20,7 +20,18 @@ pub fn x18_site(rw: &mut Rw, ins: &Ins) -> Res<(i64, &'static str)> {
         } else if let Some(&(base, count)) = rw.jumps.get(a) {
             site_br(rw, base, count)?
         } else {
-            return Err(Fail::new(format!("KeyError: {a}")));
+            return Err(Fail::new(format!(
+                "unresolved br x18 dispatch: module={} build_id={} address={:#x} (decimal {}) word={:#010x} operands={}; analyzed_offset_tables={} analyzed_target_tables={} recognized_tail_calls={}. The branch target table was not proven, so this module was not rewritten.",
+                rw.name,
+                rw.build_id,
+                a,
+                a,
+                ins.word,
+                ins.op_str,
+                rw.jumps.items.len(),
+                rw.tabjumps.items.len(),
+                rw.tailcalls.len()
+            )));
         };
         return Ok((st, "br"));
     }
