@@ -6,6 +6,8 @@ public enum TitleKeysError: Error, Equatable {
     case invalidTitleKey(Int)
     case duplicateRightsID(Int, String)
     case noKeysFound
+    case duplicateTicketRightsID(String)
+    case noCommonTickets
 }
 
 /// Encrypted title keys indexed by their 16-byte NCA Rights ID.
@@ -44,6 +46,19 @@ public struct TitleKeys {
             parsed[rightsName] = titleKey
         }
         guard !parsed.isEmpty else { throw TitleKeysError.noKeysFound }
+        self.values = parsed
+    }
+
+
+    public init(ticketData: [Data]) throws {
+        var parsed: [String: Data] = [:]
+        for data in ticketData {
+            let ticket = try Ticket(data: data)
+            let name = ticket.rightsID.map { String(format: "%02x", $0) }.joined()
+            guard parsed[name] == nil else { throw TitleKeysError.duplicateTicketRightsID(name) }
+            parsed[name] = ticket.encryptedTitleKey
+        }
+        guard !parsed.isEmpty else { throw TitleKeysError.noCommonTickets }
         self.values = parsed
     }
 
