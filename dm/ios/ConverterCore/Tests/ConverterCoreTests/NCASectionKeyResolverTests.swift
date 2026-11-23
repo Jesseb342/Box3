@@ -76,7 +76,7 @@ final class NCASectionKeyResolverTests: XCTestCase {
         var bytes = makePlainHeader(oldGeneration: 1, newGeneration: 3, area: 0, encrypted: Data(repeating: 0, count: 0x40))
         bytes.replaceSubrange(0x230..<0x240, with: rightsID)
         let header = try NCAHeader(plaintextHeader: bytes)
-        let keys = try ProdKeys(text: "titlekek_04=\\(hex(titleKek))\\ntitlekek_02=\\(hex(Data(repeating: 0x11, count: 16)))")
+        let keys = try ProdKeys(text: "titlekek_04=\(hex(titleKek))\ntitlekek_02=\(hex(Data(repeating: 0x11, count: 16)))")
         var ticket = Data(repeating: 0, count: 0x140 + 0x2c0)
         ticket[0] = 0x01
         ticket[2] = 0x01
