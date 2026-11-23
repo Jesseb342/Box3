@@ -10,11 +10,10 @@ struct Box3ConverterApp: App {
 }
 
 private enum ImportTarget: String {
-    case prodKeys, titleKeys, base, update, dlc
+    case prodKeys, base, update, dlc
     var title: String {
         switch self {
         case .prodKeys: return "prod.keys"
-        case .titleKeys: return "title.keys"
         case .base: return "Base NSP"
         case .update: return "Update NSP"
         case .dlc: return "DLC NSP"
@@ -40,7 +39,6 @@ struct ConverterView: View {
                     fileRow(.base)
                 }
                 Section("Optional content") {
-                    fileRow(.titleKeys)
                     fileRow(.update)
                     fileRow(.dlc)
                 }
@@ -83,7 +81,7 @@ struct ConverterView: View {
                 if let url = files[target] {
                     Text(url.lastPathComponent).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 } else {
-                    Text(target == .titleKeys || target == .update || target == .dlc ? "Optional" : "Not selected")
+                    Text(target == .update || target == .dlc ? "Optional" : "Not selected")
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
@@ -122,18 +120,16 @@ struct ConverterView: View {
         var packages = [NSPPackageInput(role: .base, url: base)]
         if let update = files[.update] { packages.append(NSPPackageInput(role: .update, url: update)) }
         if let dlc = files[.dlc] { packages.append(NSPPackageInput(role: .dlc, url: dlc)) }
-        let titleKeys = files[.titleKeys]
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let output = documents.appendingPathComponent("Swapp-Modules-\(UUID().uuidString)", isDirectory: true)
         isRunning = true
-        status = "Inspecting NSP files, decrypting supported sections, verifying PFS0, and rewriting modules…"
+        status = "Inspecting NSP files and embedded tickets, decrypting supported sections, verifying PFS0, and rewriting modules…"
         outputPath = ""
         DispatchQueue.global(qos: .userInitiated).async {
             do {
                 let result = try NSPMultiPackageRewritePipeline.process(
                     packages: packages,
                     prodKeysURL: keys,
-                    titleKeysURL: titleKeys,
                     outputDirectory: output
                 )
                 DispatchQueue.main.async {
