@@ -51,7 +51,8 @@ public enum NSPMultiPackageRewritePipeline {
     ) throws -> NSPMultiPackageRewriteResult {
         let ordered = try validateAndOrder(packages)
         let keys = try ProdKeys(contentsOf: prodKeysURL)
-        let titleKeys = try titleKeysURL.map { try TitleKeys(contentsOf: $0) }
+        let ticketData = try ordered.flatMap { try NSPArchive(url: $0.url).ticketData }
+        let titleKeys = ticketData.isEmpty ? nil : try TitleKeys(ticketData: ticketData)
 
         guard outputDirectory.isFileURL else {
             throw NSPMultiPackageRewriteError.invalidPackageURL(.base)
