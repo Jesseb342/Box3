@@ -5,7 +5,7 @@ public enum NCAIVFCVerifierError: Error, Equatable {
     case invalidFileURL
     case sectionOutsideFile
     case truncatedData
-    case masterHashMismatch
+    case masterHashMismatch(expectedHashPrefix: String, actualHashPrefix: String, levelOffset: UInt64, dataSize: UInt64, blockSize: UInt64)
     case levelHashMismatch(level: Int, block: UInt64)
     case arithmeticOverflow
 }
@@ -76,7 +76,13 @@ public enum NCAIVFCVerifier {
                 let expected = expectedHashes.subdata(in: hashOffset..<(hashOffset + 0x20))
                 guard actualHash == expected else {
                     if index == 0 {
-                        throw NCAIVFCVerifierError.masterHashMismatch
+                        throw NCAIVFCVerifierError.masterHashMismatch(
+                            expectedHashPrefix: Self.hexPrefix(expected, count: 8),
+                            actualHashPrefix: Self.hexPrefix(actualHash, count: 8),
+                            levelOffset: level.logicalOffset,
+                            dataSize: level.dataSize,
+                            blockSize: level.blockSize
+                        )
                     }
                     throw NCAIVFCVerifierError.levelHashMismatch(level: index, block: blockIndex)
                 }
@@ -87,6 +93,10 @@ public enum NCAIVFCVerifier {
         let romFS = superblock.levels[superblock.levels.count - 1]
         return Result(verifiedBlockCount: verified,
                       romFSOffset: romFS.logicalOffset, romFSSize: romFS.dataSize)
+    }
+
+    private static func hexPrefix(_ data: Data, count: Int) -> String {
+        data.prefix(count).map { String(format: "%02x", $0) }.joined()
     }
 
     private static func paddedBlockDigest(
