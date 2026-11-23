@@ -137,6 +137,22 @@ public final class PFS0Archive {
         entriesByName[name]
     }
 
+
+    /// Reads a small metadata entry (for example a .tik ticket) into memory.
+    /// Large game payloads must continue to use copyEntry(_:to:).
+    public func readEntryData(named name: String, maximumSize: UInt64 = 1 << 20) throws -> Data {
+        guard let entry = entriesByName[name] else { throw PFS0Error.entryNotFound(name) }
+        guard entry.size <= maximumSize, entry.size <= UInt64(Int.max) else {
+            throw PFS0Error.unreasonableStringTable
+        }
+        let handle = try FileHandle(forReadingFrom: sourceURL)
+        defer { try? handle.close() }
+        let absolute = dataRegionOffset.addingReportingOverflow(entry.offset)
+        guard !absolute.overflow else { throw PFS0Error.arithmeticOverflow }
+        try handle.seek(toOffset: absolute.partialValue)
+        return try Self.readExactly(entry.size, from: handle)
+    }
+
     /// Copies one entry to a new file without loading its payload into memory.
     public func copyEntry(named name: String, to destinationURL: URL) throws {
         guard let entry = entriesByName[name] else {
