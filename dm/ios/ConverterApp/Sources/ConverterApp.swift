@@ -157,7 +157,8 @@ struct ConverterView: View {
             } catch {
                 DispatchQueue.main.async {
                     isRunning = false
-                    status = "Conversion stopped: \(error.localizedDescription)"
+                    let nsError = error as NSError
+                    status = "Conversion stopped. \(String(reflecting: error)) [domain: \(nsError.domain), code: \(nsError.code)]"
                 }
             }
         }
