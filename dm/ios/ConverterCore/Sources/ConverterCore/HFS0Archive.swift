@@ -80,6 +80,13 @@ public final class HFS0Archive {
         self.entriesByName = byName
     }
 
+    public func openNestedArchive(named name: String) throws -> HFS0Archive {
+        guard let entry = entriesByName[name] else { throw HFS0Error.entryNotFound(name) }
+        let absolute = dataRegionOffset.addingReportingOverflow(entry.offset)
+        guard !absolute.overflow else { throw HFS0Error.arithmeticOverflow }
+        return try HFS0Archive(url: sourceURL, offset: absolute.partialValue, size: entry.size)
+    }
+
     public func readEntryData(named name: String, maximumSize: UInt64 = 1 << 20) throws -> Data {
         guard let entry = entriesByName[name] else { throw HFS0Error.entryNotFound(name) }
         guard entry.size <= maximumSize, entry.size <= UInt64(Int.max) else { throw HFS0Error.entryTooLarge(name) }
