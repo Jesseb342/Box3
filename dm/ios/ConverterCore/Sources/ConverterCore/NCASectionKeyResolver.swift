@@ -59,7 +59,7 @@ public enum NCASectionKeyResolver {
         guard let encryptedTitleKey = titleKeys.encryptedTitleKey(for: header.rightsID) else {
             throw NCASectionKeyResolverError.missingTitleKey(rightsName)
         }
-        let generation = header.keyAreaGenerationIndex
+        let generation = titleKeys.masterKeyRevision(for: header.rightsID) ?? header.keyAreaGenerationIndex
         let primaryName = String(format: "titlekek_%02x", generation)
         let aliasName = String(format: "ticket_commonkey_%02x", generation)
         guard let titleKek = keys.value(for: primaryName) ?? keys.value(for: aliasName) else {
