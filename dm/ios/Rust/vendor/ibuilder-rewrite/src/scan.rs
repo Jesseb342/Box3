@@ -39,7 +39,9 @@ fn function_starts(img: &[u8], text_end: i64) -> Res<Vec<i64>> {
                     .ok_or_else(|| Fail::new("short read"))?,
                 8,
             ),
-            _ => return Err(Fail::new(format!("KeyError: {fmt}"))),
+            _ => return Err(Fail::new(format!(
+                "unsupported eh_frame_hdr pointer encoding: format={fmt} full_encoding={enc:#04x} image_offset={o:#x}"
+            ))),
         };
         if app == 0x10 {
             v += o;
@@ -734,7 +736,12 @@ impl Solver {
 pub fn run(rw: &mut Rw) -> Res<()> {
     let name = rw.name.clone();
     let text_end = rw.text_end;
-    rw.starts = function_starts(&rw.img.b, text_end)?;
+    rw.starts = function_starts(&rw.img.b, text_end).map_err(|e| {
+        Fail::new(format!(
+            "module={} build_id={} eh_frame_hdr function table: {}",
+            rw.name, rw.build_id, e.msg
+        ))
+    })?;
     // Data blocks in the text are not code: words there that read as rewrite sites are left alone
     crate::mark("starts");
     rw.data_blocks = crate::fde::data_blocks(&rw.img.b, text_end).map_err(Fail::new)?;
