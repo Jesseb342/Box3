@@ -53,10 +53,22 @@ public struct TitleKeys {
     public init(ticketData: [Data]) throws {
         var parsed: [String: Data] = [:]
         for data in ticketData {
-            let ticket = try Ticket(data: data)
+            let ticket: Ticket
+            do {
+                ticket = try Ticket(data: data)
+            } catch TicketError.personalizedTicket {
+                // These require console-bound private material; unrelated personalized
+                // tickets must not block common-ticket titles in the same package.
+                continue
+            }
             let name = ticket.rightsID.map { String(format: "%02x", $0) }.joined()
-            guard parsed[name] == nil else { throw TitleKeysError.duplicateTicketRightsID(name) }
-            parsed[name] = ticket.encryptedTitleKey
+            if let existing = parsed[name] {
+                guard existing == ticket.encryptedTitleKey else {
+                    throw TitleKeysError.duplicateTicketRightsID(name)
+                }
+            } else {
+                parsed[name] = ticket.encryptedTitleKey
+            }
         }
         guard !parsed.isEmpty else { throw TitleKeysError.noCommonTickets }
         self.values = parsed
