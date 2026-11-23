@@ -35,13 +35,18 @@ public final class XCIArchive {
         guard let secureEntry = root.entries.first(where: { $0.name == "secure" }) else {
             throw XCIArchiveError.missingSecurePartition
         }
-        self.secure = try root.openNestedArchive(named: secureEntry.name)
-        self.ncaEntries = secure.entries
+        let secureArchive = try root.openNestedArchive(named: secureEntry.name)
+        let entries = secureArchive.entries
+        let programs = entries
             .filter { $0.name.lowercased().hasSuffix(".nca") }
             .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-        self.ticketData = try secure.entries
+        let tickets = try entries
             .filter { $0.name.lowercased().hasSuffix(".tik") }
-            .map { try secure.readEntryData(named: $0.name) }
+            .map { try secureArchive.readEntryData(named: $0.name) }
+
+        self.secure = secureArchive
+        self.ncaEntries = programs
+        self.ticketData = tickets
     }
 
     public func extractNCA(named name: String, to destinationURL: URL) throws {
