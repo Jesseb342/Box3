@@ -26,7 +26,9 @@ public final class XCIArchive {
         let rawOffset = try handle.read(upToCount: 8) ?? Data()
         guard rawOffset.count == 8 else { throw XCIArchiveError.invalidHeader }
         let pageAddress = Self.u64(rawOffset)
-        let partitionOffset = pageAddress == 0 ? UInt64(0x10000) : pageAddress * 0x200
+        let scaled = pageAddress.multipliedReportingOverflow(by: 0x200)
+        guard !scaled.overflow else { throw XCIArchiveError.invalidHeader }
+        let partitionOffset = pageAddress == 0 ? UInt64(0x10000) : scaled.partialValue
         guard partitionOffset < fileSize else { throw XCIArchiveError.invalidHeader }
 
         let root = try HFS0Archive(url: url, offset: partitionOffset, size: fileSize - partitionOffset)
