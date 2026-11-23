@@ -68,6 +68,26 @@ final class NCASectionKeyResolverTests: XCTestCase {
         XCTAssertEqual(try NCASectionKeyResolver.sectionCTRKey(header: header, keys: keys, titleKeys: titleKeys), clearTitleKey)
     }
 
+    func testTicketRevisionSelectsTitleKekInsteadOfNCAHeaderGeneration() throws {
+        let titleKek = Data(repeating: 0x6D, count: 16)
+        let clearTitleKey = Data((0..<16).map { UInt8(0xA0 + $0) })
+        let encryptedTitleKey = try AESXTS.encryptECB(clearTitleKey, key: titleKek)
+        let rightsID = Data((0..<16).map { UInt8($0 + 1) })
+        var bytes = makePlainHeader(oldGeneration: 1, newGeneration: 3, area: 0, encrypted: Data(repeating: 0, count: 0x40))
+        bytes.replaceSubrange(0x230..<0x240, with: rightsID)
+        let header = try NCAHeader(plaintextHeader: bytes)
+        let keys = try ProdKeys(text: "titlekek_04=\\(hex(titleKek))\\ntitlekek_02=\\(hex(Data(repeating: 0x11, count: 16)))")
+        var ticket = Data(repeating: 0, count: 0x140 + 0x2c0)
+        ticket[0] = 0x01
+        ticket[2] = 0x01
+        ticket.replaceSubrange(0x140 + 0x40..<0x140 + 0x50, with: encryptedTitleKey)
+        ticket[0x140 + 0x141] = 0
+        ticket[0x140 + 0x145] = 4
+        ticket.replaceSubrange(0x140 + 0x160..<0x140 + 0x170, with: rightsID)
+        let titleKeys = try TitleKeys(ticketData: [ticket])
+        XCTAssertEqual(try NCASectionKeyResolver.titleKey(header: header, keys: keys, titleKeys: titleKeys), clearTitleKey)
+    }
+
     func testAcceptsLibNXTicketCommonKeyAliasForTitleKek() throws {
         let titleKek = Data(repeating: 0x31, count: 16)
         let clearTitleKey = Data(repeating: 0x72, count: 16)
