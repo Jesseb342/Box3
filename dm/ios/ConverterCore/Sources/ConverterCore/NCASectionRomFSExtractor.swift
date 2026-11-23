@@ -11,7 +11,6 @@ public enum NCASectionRomFSExtractorError: Error, Equatable {
     case truncatedSection
     case couldNotCreateOutput
     case arithmeticOverflow
-    case integrityVerificationFailed(String)
 }
 
 /// Decrypts a standard AES-CTR RomFS section, verifies its complete IVFC tree,
@@ -104,40 +103,11 @@ public enum NCASectionRomFSExtractor {
             hashData: fileSystemHeader.hashData,
             sectionSize: sectionSize
         )
-        let verified: NCAIVFCVerifier.Result
-        do {
-            verified = try NCAIVFCVerifier.verify(
-                decryptedSectionURL: decryptedSectionURL,
-                sectionSize: sectionSize,
-                superblock: superblock
-            )
-        } catch let error as NCAIVFCVerifierError {
-            switch error {
-            case let .masterHashMismatch(expected, actual, levelOffset, dataSize, blockSize):
-                let rightsID = inspection.header.rightsID.map { String(format: "%02x", $0) }.joined()
-                let ticketRevision = titleKeys?.masterKeyRevision(for: inspection.header.rightsID)
-                let revisionText = ticketRevision.map { String(format: "0x%02x", $0) } ?? "unavailable"
-                let details = String(
-                    format: "IVFC level-0 master hash mismatch. NCA title ID: %016llx; Rights ID: %@; NCA key generation index: %u; ticket master-key revision: %@; section: %d; absolute offset: 0x%llx; section size: 0x%llx; section CTR seed: %@; level offset: 0x%llx; level data size: 0x%llx; hash block size: 0x%llx; expected SHA-256 prefix: %@; actual SHA-256 prefix: %@. Key bytes are not included.",
-                    inspection.header.titleID,
-                    rightsID,
-                    inspection.header.keyAreaGenerationIndex,
-                    revisionText,
-                    verifiedSection.index,
-                    verifiedSection.byteOffset,
-                    verifiedSection.byteSize,
-                    fsHeader.sectionCounter.map { String(format: "%02x", $0) }.joined(),
-                    levelOffset,
-                    dataSize,
-                    blockSize,
-                    expected,
-                    actual
-                )
-                throw NCASectionRomFSExtractorError.integrityVerificationFailed(details)
-            default:
-                throw error
-            }
-        }
+        let verified = try NCAIVFCVerifier.verify(
+            decryptedSectionURL: decryptedSectionURL,
+            sectionSize: sectionSize,
+            superblock: superblock
+        )
         let (end, overflow) = verified.romFSOffset.addingReportingOverflow(verified.romFSSize)
         guard !overflow, end <= sectionSize else {
             throw NCASectionRomFSExtractorError.sectionOutsideFile
