@@ -25,7 +25,12 @@ final class NCAHierarchicalSHA256VerifierTests: XCTestCase {
         XCTAssertThrowsError(try NCAHierarchicalSHA256Verifier.verify(
             decryptedSectionURL: fixture.url, sectionSize: fixture.sectionSize, superblock: bad
         )) {
-            XCTAssertEqual($0 as? NCAHierarchicalSHA256VerifierError, .masterHashMismatch)
+            guard case let NCAHierarchicalSHA256VerifierError.masterHashMismatch(expected, _, offset, size) = $0 as? NCAHierarchicalSHA256VerifierError else {
+                return XCTFail("Expected a detailed master hash mismatch, got: \\($0)")
+            }
+            XCTAssertEqual(expected, "ffffffffffffffff")
+            XCTAssertEqual(offset, 0)
+            XCTAssertEqual(size, 0x40)
         }
     }
 
