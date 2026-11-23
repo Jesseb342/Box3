@@ -14,7 +14,7 @@ private enum ImportTarget: String {
     var title: String {
         switch self {
         case .prodKeys: return "prod.keys"
-        case .base: return "Base NSP"
+        case .base: return "Base Game (NSP/XCI)"
         case .update: return "Update NSP"
         case .dlc: return "DLC NSP"
         }
