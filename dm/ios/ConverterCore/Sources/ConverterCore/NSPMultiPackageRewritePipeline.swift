@@ -45,7 +45,6 @@ public enum NSPMultiPackageRewritePipeline {
     public static func process(
         packages: [NSPPackageInput],
         prodKeysURL: URL,
-        titleKeysURL: URL? = nil,
         gamesDirectory: URL? = nil,
         outputDirectory: URL
     ) throws -> NSPMultiPackageRewriteResult {
