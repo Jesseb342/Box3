@@ -6,14 +6,15 @@ final class TicketTests: XCTestCase {
     func testParsesCommonTicketRightsIDAndEncryptedTitleKey() throws {
         let rights = try bytes("01009bf0072d40000000000000000004")
         let encrypted = try bytes("00112233445566778899aabbccddeeff")
-        let ticket = try Ticket(data: fixture(signature: 0x010001, keyType: 0, rights: rights, key: encrypted))
+        let ticket = try Ticket(data: fixture(signature: 0x010001, keyType: 0, revision: 4, rights: rights, key: encrypted))
         XCTAssertEqual(ticket.rightsID, rights)
         XCTAssertEqual(ticket.encryptedTitleKey, encrypted)
+        XCTAssertEqual(ticket.masterKeyRevision, 4)
     }
 
     func testRejectsPersonalizedTicketWithoutConsolePrivateKey() throws {
         let rights = try bytes("01009bf0072d40000000000000000004")
-        XCTAssertThrowsError(try Ticket(data: fixture(signature: 0x010001, keyType: 1, rights: rights, key: Data(repeating: 0, count: 16)))) {
+        XCTAssertThrowsError(try Ticket(data: fixture(signature: 0x010001, keyType: 1, revision: 0, rights: rights, key: Data(repeating: 0, count: 16)))) {
             XCTAssertEqual($0 as? TicketError, .personalizedTicket("01009bf0072d40000000000000000004"))
         }
     }
@@ -21,11 +22,12 @@ final class TicketTests: XCTestCase {
     func testTitleKeysCanBeBuiltFromTicketData() throws {
         let rights = try bytes("01009bf0072d40000000000000000004")
         let encrypted = try bytes("00112233445566778899aabbccddeeff")
-        let keys = try TitleKeys(ticketData: [fixture(signature: 0x010001, keyType: 0, rights: rights, key: encrypted)])
+        let keys = try TitleKeys(ticketData: [fixture(signature: 0x010001, keyType: 0, revision: 5, rights: rights, key: encrypted)])
         XCTAssertEqual(keys.encryptedTitleKey(for: rights), encrypted)
+        XCTAssertEqual(keys.masterKeyRevision(for: rights), 5)
     }
 
-    private func fixture(signature: UInt32, keyType: UInt8, rights: Data, key: Data) -> Data {
+    private func fixture(signature: UInt32, keyType: UInt8, revision: UInt8, rights: Data, key: Data) -> Data {
         let bodyOffset = signature == 0x010001 ? 0x140 : 0x240
         var data = Data(repeating: 0, count: bodyOffset + 0x2c0)
         data[0] = UInt8(signature & 0xff)
@@ -34,6 +36,7 @@ final class TicketTests: XCTestCase {
         data[3] = UInt8((signature >> 24) & 0xff)
         data.replaceSubrange((bodyOffset + 0x40)..<(bodyOffset + 0x50), with: key)
         data[bodyOffset + 0x141] = keyType
+        data[bodyOffset + 0x145] = revision
         data.replaceSubrange((bodyOffset + 0x160)..<(bodyOffset + 0x170), with: rights)
         return data
     }
