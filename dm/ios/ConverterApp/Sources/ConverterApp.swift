@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import UniformTypeIdentifiers
 import ConverterCore
 
@@ -58,9 +59,20 @@ struct ConverterView: View {
                 }
                 Section("Status") {
                     Text(status)
+                        .textSelection(.enabled)
                     if !outputPath.isEmpty {
                         Text(outputPath).font(.caption2).textSelection(.enabled)
                     }
+                    Button {
+                        var text = status
+                        if !outputPath.isEmpty {
+                            text += "\nOutput: " + outputPath
+                        }
+                        UIPasteboard.general.string = text
+                    } label: {
+                        Label("Copy Output / Error", systemImage: "doc.on.doc")
+                    }
+                    .disabled(status.isEmpty && outputPath.isEmpty)
                 }
             }
             .navigationTitle("Swapp")
