@@ -59,7 +59,9 @@ public enum NCASectionKeyResolver {
         guard let encryptedTitleKey = titleKeys.encryptedTitleKey(for: header.rightsID) else {
             throw NCASectionKeyResolverError.missingTitleKey(rightsName)
         }
-        let generation = titleKeys.masterKeyRevision(for: header.rightsID) ?? header.keyAreaGenerationIndex
+        // The NCA header's crypto_type/crypto_type2 selects the titlekek generation.
+        // Ticket master_key_revision is metadata and must not override this value.
+        let generation = header.keyAreaGenerationIndex
         let primaryName = String(format: "titlekek_%02x", generation)
         let aliasName = String(format: "ticket_commonkey_%02x", generation)
         guard let titleKek = keys.value(for: primaryName) ?? keys.value(for: aliasName) else {
