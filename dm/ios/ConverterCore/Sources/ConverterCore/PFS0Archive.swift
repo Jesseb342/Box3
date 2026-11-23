@@ -27,6 +27,12 @@ public final class PFS0Archive {
         /// Byte offset relative to the beginning of the PFS0 data region.
         public let offset: UInt64
         public let size: UInt64
+
+        public init(name: String, offset: UInt64, size: UInt64) {
+            self.name = name
+            self.offset = offset
+            self.size = size
+        }
     }
 
     private let sourceURL: URL
