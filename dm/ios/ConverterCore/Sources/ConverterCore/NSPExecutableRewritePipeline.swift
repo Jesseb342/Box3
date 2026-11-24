@@ -49,7 +49,8 @@ public enum NSPExecutableRewritePipeline {
         titleKeys: TitleKeys? = nil,
         gamesDirectory: URL? = nil,
         gameProfile: String? = nil,
-        outputDirectory: URL
+        outputDirectory: URL,
+        progress: ((String) -> Void)? = nil
     ) throws -> NSPExecutableRewriteResult {
         guard nspURL.isFileURL, outputDirectory.isFileURL else {
             throw NSPExecutableRewritePipelineError.invalidOutputURL
@@ -83,12 +84,15 @@ public enum NSPExecutableRewritePipeline {
             var romFSImages: [NSPRomFSImageSummary] = []
 
             for (index, entry) in archive.ncaEntries.enumerated() {
+                progress?("Package \\(nspURL.lastPathComponent): extracting NCA \\(index + 1)/\\(archive.ncaEntries.count) — \\(entry.name)")
                 let ncaURL = ncaDirectory.appendingPathComponent(String(format: "%04d-%@", index, entry.name))
                 try archive.extractNCA(named: entry.name, to: ncaURL)
+                progress?("Inspecting NCA \\(entry.name)")
                 let inspection = try NCAFileInspector.inspect(url: ncaURL, keys: keys)
                 guard inspection.header.contentType == .program else { continue }
 
                 for section in inspection.header.sections {
+                    progress?("Processing program NCA \\(entry.name), section \\(section.index)")
                     let fsHeader = try inspection.fileSystemHeader(for: section)
                     switch fsHeader.fileSystemType {
                     case .partitionFS:
@@ -112,7 +116,8 @@ public enum NSPExecutableRewritePipeline {
                             titleKeys: titleKeys,
                             gamesDirectory: gamesDirectory,
                             gameProfile: gameProfile ?? String(format: "%016llx", inspection.header.titleID),
-                            outputDirectory: sectionOutput
+                            outputDirectory: sectionOutput,
+                            progress: progress
                         )
                         moduleSets.append(NSPExecutableRewriteModuleSet(
                             ncaFileName: entry.name,

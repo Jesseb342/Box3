@@ -27,7 +27,9 @@ struct ConverterView: View {
     @State private var activeTarget: ImportTarget?
     @State private var showingImporter = false
     @State private var isRunning = false
-    @State private var status = "Import your keys and base game NSP to begin."
+    @State private var status = ConversionLogStore.load().isEmpty
+        ? "Import your keys and base game NSP to begin."
+        : ConversionLogStore.load()
     @State private var outputPath = ""
 
     private var canRun: Bool { files[.prodKeys] != nil && files[.base] != nil && !isRunning }
@@ -64,7 +66,8 @@ struct ConverterView: View {
                         Text(outputPath).font(.caption2).textSelection(.enabled)
                     }
                     Button {
-                        var text = status
+                        var text = ConversionLogStore.load()
+                        if text.isEmpty { text = status }
                         if !outputPath.isEmpty {
                             text += "\nOutput: " + outputPath
                         }
@@ -74,6 +77,10 @@ struct ConverterView: View {
                     }
                     .disabled(status.isEmpty && outputPath.isEmpty)
                 }
+            }
+            .onAppear {
+                let saved = ConversionLogStore.load()
+                if !saved.isEmpty { status = saved }
             }
             .navigationTitle("Swapp")
             .fileImporter(
@@ -135,14 +142,20 @@ struct ConverterView: View {
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let output = documents.appendingPathComponent("Swapp-Modules-\(UUID().uuidString)", isDirectory: true)
         isRunning = true
-        status = "Inspecting NSP files and embedded tickets, decrypting supported sections, verifying PFS0, and rewriting modules…"
+        status = "Starting conversion…"
         outputPath = ""
+        ConversionLogStore.clear()
+        ConversionLogStore.append("Conversion started. Files: prod.keys and base package; optional update/DLC selected: update=\(files[.update] != nil), DLC=\(files[.dlc] != nil).")
         DispatchQueue.global(qos: .userInitiated).async {
             do {
                 let result = try NSPMultiPackageRewritePipeline.process(
                     packages: packages,
                     prodKeysURL: keys,
-                    outputDirectory: output
+                    outputDirectory: output,
+                    progress: { message in
+                        ConversionLogStore.append(message)
+                        DispatchQueue.main.async { status = message }
+                    }
                 )
                 DispatchQueue.main.async {
                     isRunning = false
@@ -161,6 +174,7 @@ struct ConverterView: View {
                         romFSImages,
                         romFSMegabytes
                     )
+                    ConversionLogStore.append(status)
                 }
             } catch {
                 DispatchQueue.main.async {
@@ -170,5 +184,37 @@ struct ConverterView: View {
                 }
             }
         }
+    }
+}
+
+
+private enum ConversionLogStore {
+    private static let fileName = "Swapp-Last-Conversion.log"
+    private static let lock = NSLock()
+
+    private static var logURL: URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent(fileName)
+    }
+
+    static func load() -> String {
+        lock.lock()
+        defer { lock.unlock() }
+        return (try? String(contentsOf: logURL, encoding: .utf8)) ?? ""
+    }
+
+    static func clear() {
+        lock.lock()
+        defer { lock.unlock() }
+        try? Data().write(to: logURL, options: .atomic)
+    }
+
+    static func append(_ message: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        let timestamp = ISO8601DateFormatter().string(from: Date())
+        let previous = (try? String(contentsOf: logURL, encoding: .utf8)) ?? ""
+        let updated = previous + (previous.isEmpty ? "" : "\\n") + "[\\(timestamp)] \\(message)"
+        try? updated.write(to: logURL, atomically: true, encoding: .utf8)
     }
 }

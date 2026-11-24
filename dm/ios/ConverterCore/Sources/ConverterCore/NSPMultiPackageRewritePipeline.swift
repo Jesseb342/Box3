@@ -46,7 +46,8 @@ public enum NSPMultiPackageRewritePipeline {
         packages: [NSPPackageInput],
         prodKeysURL: URL,
         gamesDirectory: URL? = nil,
-        outputDirectory: URL
+        outputDirectory: URL,
+        progress: ((String) -> Void)? = nil
     ) throws -> NSPMultiPackageRewriteResult {
         let ordered = try validateAndOrder(packages)
         let keys = try ProdKeys(contentsOf: prodKeysURL)
@@ -76,6 +77,7 @@ public enum NSPMultiPackageRewritePipeline {
             var summaries: [NSPPackageRewriteSummary] = []
             var baseGameProfile: String?
             for input in ordered {
+                progress?("Opening \\(input.role.rawValue) package: \\(input.url.lastPathComponent)")
                 let packageOutput = staging.appendingPathComponent(input.role.rawValue, isDirectory: true)
                 let result = try NSPExecutableRewritePipeline.process(
                     nspURL: input.url,
@@ -83,7 +85,8 @@ public enum NSPMultiPackageRewritePipeline {
                     titleKeys: titleKeys,
                     gamesDirectory: gamesDirectory,
                     gameProfile: baseGameProfile,
-                    outputDirectory: packageOutput
+                    outputDirectory: packageOutput,
+                    progress: progress
                 )
                 if input.role == .base {
                     guard let titleID = result.moduleSets.first?.titleID else {
@@ -102,6 +105,7 @@ public enum NSPMultiPackageRewritePipeline {
             guard let gameProfile = baseGameProfile else {
                 throw NSPMultiPackageRewriteError.missingBasePackage
             }
+            progress?("All selected packages processed. Writing conversion manifest.")
             let manifestData = try JSONEncoder.box3MultiNSPManifest.encode(
                 NSPMultiPackageManifest(gameProfile: gameProfile, packages: summaries.map {
                     NSPPackageManifestEntry(
