@@ -61,22 +61,33 @@ pub fn eh_frame_hdr(img: &[u8]) -> Result<(i64, i64), String> {
 fn read_enc(img: &[u8], o: i64, enc: u8, ehs: i64) -> Result<(i64, i64), String> {
     let (fmt, app) = (enc & 0xF, enc & 0x70);
     let ou = pos(o)?;
-    let (mut v, sz) = match fmt {
-        0x1 => {
-            // uleb128 (the shipped engine reads it: the call-site tables of an LSDA use it)
-            let (v, end) = uleb(img, ou)?;
-            (v as i64, (end - ou) as i64)
+    // DW_EH_PE_aligned (0x50): align the encoded field to a native 8-byte
+    // pointer boundary. The format nibble is ignored by this application.
+    let (mut v, sz) = if app == 0x50 {
+        let aligned = ou.checked_add(7).ok_or_else(short)? & !7;
+        (u64_at(img, aligned)?, (aligned - ou + 8) as i64)
+    } else {
+        match fmt {
+            0x1 => {
+                // uleb128 (the shipped engine reads it: the call-site tables of an LSDA use it)
+                let (v, end) = uleb(img, ou)?;
+                (v as i64, (end - ou) as i64)
+            }
+            0x3 => (u32_at(img, ou)?, 4),
+            0xB => (i32_at(img, ou)?, 4),
+            0x0 | 0x4 => (u64_at(img, ou)?, 8),
+            0xC => (i64_at(img, ou)?, 8),
+            _ => return Err(format!("pointer encoding {enc:#x} at {o:#x}")),
         }
-        0x3 => (u32_at(img, ou)?, 4),
-        0xB => (i32_at(img, ou)?, 4),
-        0x0 | 0x4 => (u64_at(img, ou)?, 8),
-        0xC => (i64_at(img, ou)?, 8),
-        _ => return Err(format!("pointer encoding {enc:#x} at {o:#x}")),
     };
     if app == 0x10 {
         v = v.checked_add(o).ok_or_else(short)?;
     } else if app == 0x30 {
         v = v.checked_add(ehs).ok_or_else(short)?;
+    }
+    // DW_EH_PE_indirect: the decoded pointer names another pointer in the image.
+    if enc & 0x80 != 0 {
+        v = u64_at(img, pos(v)?)?;
     }
     Ok((v, sz))
 }
@@ -591,4 +602,30 @@ pub fn out_store(img: &[u8], start: i64, size: i64) -> Result<(i64, u32), String
         .parse()
         .map_err(|_| format!("the store at {:#x} has no register number", st[0].address))?;
     Ok((st[0].address, reg))
+}
+
+
+#[cfg(test)]
+mod aligned_pointer_tests {
+    use super::read_enc;
+
+    #[test]
+    fn aligned_indirect_encoding_aligns_and_dereferences() {
+        let mut img = vec![0u8; 40];
+        // Field begins at 4; DW_EH_PE_aligned moves it to offset 8.
+        img[8..16].copy_from_slice(&(24u64).to_le_bytes());
+        img[24..32].copy_from_slice(&(0x1234u64).to_le_bytes());
+        let (value, size) = read_enc(&img, 4, 0xD7, 0).unwrap();
+        assert_eq!(value, 0x1234);
+        assert_eq!(size, 12);
+    }
+
+    #[test]
+    fn aligned_encoding_ignores_reserved_format_nibble() {
+        let mut img = vec![0u8; 24];
+        img[8..16].copy_from_slice(&(0x5678u64).to_le_bytes());
+        let (value, size) = read_enc(&img, 4, 0x57, 0).unwrap();
+        assert_eq!(value, 0x5678);
+        assert_eq!(size, 12);
+    }
 }
