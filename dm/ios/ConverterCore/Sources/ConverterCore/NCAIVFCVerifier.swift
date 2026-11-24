@@ -24,7 +24,8 @@ public enum NCAIVFCVerifier {
     public static func verify(
         decryptedSectionURL: URL,
         sectionSize: UInt64,
-        superblock: NCAIVFCSuperblock
+        superblock: NCAIVFCSuperblock,
+        progress: ((String) -> Void)? = nil
     ) throws -> Result {
         guard decryptedSectionURL.isFileURL else {
             throw NCAIVFCVerifierError.invalidFileURL
@@ -59,7 +60,11 @@ public enum NCAIVFCVerifier {
                 throw NCAIVFCVerifierError.truncatedData
             }
 
+            progress?("RomFS: IVFC level \(index + 1)/\(superblock.levels.count), \(blockCount) blocks; loading expected hashes (\(expectedHashes.count) bytes)")
             for blockIndex in 0..<blockCount {
+                if blockIndex == 0 || blockIndex % 128 == 0 {
+                    progress?("RomFS: verifying IVFC level \(index + 1), block \(blockIndex + 1)/\(blockCount)")
+                }
                 let (delta, overflow) = blockIndex.multipliedReportingOverflow(by: level.blockSize)
                 let (blockOffset, offsetOverflow) = level.logicalOffset.addingReportingOverflow(delta)
                 guard !overflow, !offsetOverflow else {
@@ -82,6 +87,7 @@ public enum NCAIVFCVerifier {
                 }
                 verified += 1
             }
+            progress?("RomFS: IVFC level \(index + 1) verified")
         }
 
         let romFS = superblock.levels[superblock.levels.count - 1]
