@@ -36,7 +36,8 @@ public enum NCAExecutableRewritePipeline {
         titleKeys: TitleKeys? = nil,
         gamesDirectory: URL? = nil,
         gameProfile: String? = nil,
-        outputDirectory: URL
+        outputDirectory: URL,
+        progress: ((String) -> Void)? = nil
     ) throws -> NCAExecutableRewriteResult {
         guard ncaURL.isFileURL else { throw NCAExecutableRewritePipelineError.invalidNCAURL }
         let inspection = try NCAFileInspector.inspect(url: ncaURL, keys: keys)
@@ -68,6 +69,7 @@ public enum NCAExecutableRewritePipeline {
         }
 
         do {
+            progress?("Decrypting and verifying ExeFS section \\(sectionIndex)")
             let decryptedURL = staging.appendingPathComponent("decrypted.section")
             _ = try NCASectionStreamDecryptor.decryptSection(
                 inputURL: ncaURL,
@@ -80,6 +82,7 @@ public enum NCAExecutableRewritePipeline {
             let extractedURL = staging.appendingPathComponent("exefs", isDirectory: true)
             let rewrittenURL = staging.appendingPathComponent("rewritten", isDirectory: true)
             let gameID = String(format: "%016llx", inspection.header.titleID)
+            progress?("Extracting ExeFS entries and rewriting NSO modules")
             let exefs = try NCAExeFSRewritePipeline.extractAndRewrite(
                 decryptedSectionURL: decryptedURL,
                 sectionSize: section.byteSize,
