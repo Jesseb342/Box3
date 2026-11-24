@@ -37,6 +37,12 @@ jobs:
           cargo build --manifest-path dm/ios/Rust/Cargo.toml --release --target aarch64-apple-ios -p box3-nso-bridge
           cargo build --manifest-path dm/ios/Rust/Cargo.toml --release --target aarch64-apple-ios -p box3-rewrite-bridge
           cargo build --manifest-path dm/ios/Rust/Cargo.toml --release --target aarch64-apple-ios -p box3-macho-bridge
+      - name: Install Swift 6.2 toolchain
+        uses: swift-actions/setup-swift@7ca6abe6b3b0e8b5421b88be48feee39cbf52c6a # v2.4.0
+        with:
+          swift-version: "6.2.0"
+      - name: Verify Swift version
+        run: swift --version
       - name: Run native converter core tests
         run: swift test --package-path dm/ios/ConverterCore
       - name: Install XcodeGen
