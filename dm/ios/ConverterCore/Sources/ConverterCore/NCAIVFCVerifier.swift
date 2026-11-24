@@ -62,7 +62,10 @@ public enum NCAIVFCVerifier {
 
             progress?("RomFS: IVFC level \(index + 1)/\(superblock.levels.count), \(blockCount) blocks; loading expected hashes (\(expectedHashes.count) bytes)")
             for blockIndex in 0..<blockCount {
-                if blockIndex == 0 || blockIndex % 128 == 0 {
+                // Keep progress and persistent diagnostics lightweight on mobile.
+                // Level 6 can contain tens of thousands of blocks; emitting a log
+                // line every 128 blocks causes repeated disk writes and UI churn.
+                if blockIndex == 0 || (blockIndex + 1) % 4096 == 0 || blockIndex + 1 == blockCount {
                     progress?("RomFS: verifying IVFC level \(index + 1), block \(blockIndex + 1)/\(blockCount)")
                 }
                 let (delta, overflow) = blockIndex.multipliedReportingOverflow(by: level.blockSize)
