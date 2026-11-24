@@ -164,7 +164,7 @@ public enum NCASectionRomFSExtractor {
                     if let chunkError { throw chunkError }
                     copied += UInt64(count)
                     if copied >= nextDiagnostic || copied == verified.romFSSize {
-                        progress?("RomFS: copied \\(copied) / \\(verified.romFSSize) bytes")
+                        progress?("RomFS: copied \(copied) / \(verified.romFSSize) bytes")
                         nextDiagnostic += diagnosticInterval
                     }
                 }
@@ -181,7 +181,7 @@ public enum NCASectionRomFSExtractor {
             // Structural parsing is an additional check; IVFC verification above
             // remains the cryptographic integrity prerequisite.
             progress?("RomFS: validating extracted RomFS structure")
-            let archive = try RomFSArchive(url: stagingURL)
+            let archive = try RomFSArchive(url: stagingURL, progress: progress)
             progress?("RomFS: structural validation complete (\(archive.entries.count) entries)")
             // Publish with a same-volume atomic rename. FileManager.moveItem can
             // surface a cleanup error after the destination has already been copied;
