@@ -170,7 +170,7 @@ final class NCASectionRomFSExtractorTests: XCTestCase {
         put32(0x43465649, at: 0, in: &hashData)
         put32(0x00020000, at: 4, in: &hashData)
         put32(0x20, at: 8, in: &hashData)
-        put32(6, at: 0x0C, in: &hashData)
+        put32(7, at: 0x0C, in: &hashData)
         for index in 0..<6 {
             let at = 0x10 + index * 0x18
             put64(offsets[index], at: at, in: &hashData)
