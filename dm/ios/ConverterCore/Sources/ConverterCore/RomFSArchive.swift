@@ -128,7 +128,7 @@ public final class RomFSArchive {
             ("file metadata table", parsed.fileOffset, parsed.fileSize),
             ("file data", parsed.dataOffset, regionSize - min(parsed.dataOffset, regionSize))
         ]
-        progress?("RomFS header: dirHash=\\(parsed.dirHashOffset)+\\(parsed.dirHashSize), dirMeta=\\(parsed.dirOffset)+\\(parsed.dirSize), fileHash=\\(parsed.fileHashOffset)+\\(parsed.fileHashSize), fileMeta=\\(parsed.fileOffset)+\\(parsed.fileSize), fileDataOffset=\\(parsed.dataOffset), imageSize=\\(regionSize)")
+        progress?("RomFS header: dirHash=\(parsed.dirHashOffset)+\(parsed.dirHashSize), dirMeta=\(parsed.dirOffset)+\(parsed.dirSize), fileHash=\(parsed.fileHashOffset)+\(parsed.fileHashSize), fileMeta=\(parsed.fileOffset)+\(parsed.fileSize), fileDataOffset=\(parsed.dataOffset), imageSize=\(regionSize)")
         var previousEnd: UInt64 = 0x50
         for (name, start, length) in regions {
             let (end, addOverflow) = start.addingReportingOverflow(length)
@@ -139,9 +139,9 @@ public final class RomFSArchive {
                 throw RomFSError.invalidRegion(name)
             }
             if length > 0 {
-                progress?("RomFS region \\(name): [\\(start), \\(end)); previous region ends at \\(previousEnd)")
+                progress?("RomFS region \(name): [\(start), \(end)); previous region ends at \(previousEnd)")
                 guard start >= previousEnd else {
-                    progress?("RomFS region overlap: \\(name) starts at \\(start), before previous end \\(previousEnd)")
+                    progress?("RomFS region overlap: \(name) starts at \(start), before previous end \(previousEnd)")
                     throw RomFSError.overlappingRegions
                 }
                 previousEnd = end
