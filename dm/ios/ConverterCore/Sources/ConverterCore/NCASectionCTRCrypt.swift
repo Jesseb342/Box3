@@ -36,13 +36,13 @@ public enum NCASectionCTRCrypt {
         guard !data.isEmpty else { return Data() }
 
         let (totalBytes, sizeOverflow) = data.count.addingReportingOverflow(byteOffsetInBlock)
-        guard !sizeOverflow else { throw NCASectionCTRCryptError.cryptographicFailure(kCCParamError) }
+        guard !sizeOverflow else { throw NCASectionCTRCryptError.cryptographicFailure(CCCryptorStatus(kCCParamError)) }
         let (roundedBytes, roundingOverflow) = totalBytes.addingReportingOverflow(15)
-        guard !roundingOverflow else { throw NCASectionCTRCryptError.cryptographicFailure(kCCParamError) }
+        guard !roundingOverflow else { throw NCASectionCTRCryptError.cryptographicFailure(CCCryptorStatus(kCCParamError)) }
         let blockCount = roundedBytes / 16
         let (counterByteCount, counterSizeOverflow) = blockCount.multipliedReportingOverflow(by: 16)
         guard !counterSizeOverflow, counterByteCount <= Int(UInt32.max) else {
-            throw NCASectionCTRCryptError.cryptographicFailure(kCCParamError)
+            throw NCASectionCTRCryptError.cryptographicFailure(CCCryptorStatus(kCCParamError))
         }
 
         var counter = Array(initialCounter)
@@ -68,7 +68,7 @@ public enum NCASectionCTRCrypt {
                         key.count,
                         nil,
                         counterBytes.baseAddress,
-                        CC_LONG(counterByteCount),
+                        counterByteCount,
                         outputBytes.baseAddress,
                         counterByteCount,
                         &moved
