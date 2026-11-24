@@ -31,7 +31,8 @@ public enum NCASectionRomFSExtractor {
         section: NCAHeader.Section,
         keys: ProdKeys,
         titleKeys: TitleKeys? = nil,
-        to destinationURL: URL
+        to destinationURL: URL,
+        progress: ((String) -> Void)? = nil
     ) throws -> Result {
         guard inputURL.isFileURL, destinationURL.isFileURL else {
             throw NCASectionRomFSExtractorError.invalidFileURL
@@ -60,6 +61,7 @@ public enum NCASectionRomFSExtractor {
         )
         defer { try? FileManager.default.removeItem(at: decryptedURL) }
 
+        progress?("RomFS: decrypting section \(verifiedSection.index) (\(verifiedSection.byteSize) bytes)")
         _ = try NCASectionStreamDecryptor.decryptSection(
             inputURL: inputURL,
             outputURL: decryptedURL,
@@ -68,11 +70,13 @@ public enum NCASectionRomFSExtractor {
             keys: keys,
             titleKeys: titleKeys
         )
+        progress?("RomFS: section decryption complete; preparing IVFC verification")
         return try extract(
             decryptedSectionURL: decryptedURL,
             sectionSize: verifiedSection.byteSize,
             fileSystemHeader: fsHeader,
-            to: destinationURL
+            to: destinationURL,
+            progress: progress
         )
     }
 
@@ -80,7 +84,8 @@ public enum NCASectionRomFSExtractor {
         decryptedSectionURL: URL,
         sectionSize: UInt64,
         fileSystemHeader: NCAFileSystemHeader,
-        to destinationURL: URL
+        to destinationURL: URL,
+        progress: ((String) -> Void)? = nil
     ) throws -> Result {
         guard decryptedSectionURL.isFileURL, destinationURL.isFileURL else {
             throw NCASectionRomFSExtractorError.invalidFileURL
@@ -99,15 +104,19 @@ public enum NCASectionRomFSExtractor {
             throw NCASectionRomFSExtractorError.destinationAlreadyExists
         }
 
+        progress?("RomFS: parsing IVFC superblock")
         let superblock = try NCAIVFCSuperblock(
             hashData: fileSystemHeader.hashData,
             sectionSize: sectionSize
         )
+        progress?("RomFS: IVFC superblock parsed; verifying integrity tree (\(superblock.levels.count) levels)")
         let verified = try NCAIVFCVerifier.verify(
             decryptedSectionURL: decryptedSectionURL,
             sectionSize: sectionSize,
-            superblock: superblock
+            superblock: superblock,
+            progress: progress
         )
+        progress?("RomFS: IVFC verification complete; \(verified.verifiedBlockCount) blocks verified")
         let (end, overflow) = verified.romFSOffset.addingReportingOverflow(verified.romFSSize)
         guard !overflow, end <= sectionSize else {
             throw NCASectionRomFSExtractorError.sectionOutsideFile
@@ -125,7 +134,8 @@ public enum NCASectionRomFSExtractor {
             let input = try FileHandle(forReadingFrom: decryptedSectionURL)
             let output = try FileHandle(forWritingTo: stagingURL)
             do {
-                try input.seek(toOffset: verified.romFSOffset)
+                progress?("RomFS: copying verified image (\(verified.romFSSize) bytes)")
+            try input.seek(toOffset: verified.romFSOffset)
                 var copied: UInt64 = 0
                 while copied < verified.romFSSize {
                     let count = Int(min(UInt64(ioChunkSize), verified.romFSSize - copied))
@@ -146,7 +156,9 @@ public enum NCASectionRomFSExtractor {
 
             // Structural parsing is an additional check; IVFC verification above
             // remains the cryptographic integrity prerequisite.
+            progress?("RomFS: validating extracted RomFS structure")
             let archive = try RomFSArchive(url: stagingURL)
+            progress?("RomFS: structural validation complete (\(archive.entries.count) entries)")
             // Publish with a same-volume atomic rename. FileManager.moveItem can
             // surface a cleanup error after the destination has already been copied;
             // rename keeps publication atomic and avoids a partially visible image.
