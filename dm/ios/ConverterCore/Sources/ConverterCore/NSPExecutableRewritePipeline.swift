@@ -140,14 +140,17 @@ public enum NSPExecutableRewritePipeline {
                         }
                         let relativePath = String(format: "romfs/%04d-section-%d/RomFS.img", index, section.index)
                         let imageURL = resultDirectory.appendingPathComponent(relativePath)
+                        progress?("RomFS: beginning extraction for NCA \(entry.name), section \(section.index)")
                         let extracted = try NCASectionRomFSExtractor.extract(
                             inputURL: ncaURL,
                             inspection: inspection,
                             section: section,
                             keys: keys,
                             titleKeys: titleKeys,
-                            to: imageURL
+                            to: imageURL,
+                            progress: progress
                         )
+                        progress?("RomFS: completed extraction for NCA \(entry.name), section \(section.index)")
                         romFSImages.append(NSPRomFSImageSummary(
                             ncaFileName: entry.name,
                             titleID: String(format: "%016llx", inspection.header.titleID),
