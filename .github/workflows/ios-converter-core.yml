@@ -45,6 +45,11 @@ jobs:
         run: swift --version
       - name: Run native converter core tests
         run: swift test --package-path dm/ios/ConverterCore
+      - name: Select Xcode 26.3 (Swift 6.2)
+        run: |
+          sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
+          xcodebuild -version
+          xcrun swift --version
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Generate standalone converter app project
