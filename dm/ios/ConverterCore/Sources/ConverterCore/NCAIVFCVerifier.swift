@@ -76,13 +76,27 @@ public enum NCAIVFCVerifier {
                 let consumed = delta
                 let remaining = level.dataSize - consumed
                 let actualLength = min(level.blockSize, remaining)
-                let actualHash = try paddedBlockDigest(
-                    handle: handle, offset: blockOffset,
-                    actualLength: actualLength, paddedLength: level.blockSize
-                )
-                let hashOffset = Int(blockIndex * 0x20)
-                let expected = expectedHashes.subdata(in: hashOffset..<(hashOffset + 0x20))
-                guard actualHash == expected else {
+                // FileHandle/Data bridge through Foundation. On iOS, a long-running
+                // background loop can otherwise accumulate autoreleased objects until
+                // the whole conversion returns. Level 6 may execute this path ~96,000
+                // times, so drain the pool for every verified block.
+                var blockReadError: Error?
+                let blockMatches = autoreleasepool {
+                    do {
+                        let actualHash = try paddedBlockDigest(
+                            handle: handle, offset: blockOffset,
+                            actualLength: actualLength, paddedLength: level.blockSize
+                        )
+                        let hashOffset = Int(blockIndex * 0x20)
+                        let expected = expectedHashes.subdata(in: hashOffset..<(hashOffset + 0x20))
+                        return actualHash == expected
+                    } catch {
+                        blockReadError = error
+                        return false
+                    }
+                }
+                if let blockReadError { throw blockReadError }
+                guard blockMatches else {
                     if index == 0 {
                         throw NCAIVFCVerifierError.masterHashMismatch
                     }
