@@ -46,14 +46,18 @@ public struct NCAIVFCSuperblock: Equatable {
         guard masterHashSize == 0x20 else {
             throw NCAIVFCSuperblockError.unsupportedMasterHashSize(masterHashSize)
         }
-        let count = Self.u32(hashData, 0x0C)
-        guard count == 6 else {
-            throw NCAIVFCSuperblockError.unsupportedLayerCount(count)
+        // Nintendo's NCA IVFC header stores MaxLayers=7 for the standard
+        // six on-disk verification levels plus the external master-hash layer.
+        // The fixed 0xF8 HashData layout contains exactly six level descriptors.
+        let maxLayers = Self.u32(hashData, 0x0C)
+        guard maxLayers == 7 else {
+            throw NCAIVFCSuperblockError.unsupportedLayerCount(maxLayers)
         }
 
+        let levelDescriptorCount = 6
         var levels: [Level] = []
-        levels.reserveCapacity(Int(count))
-        for index in 0..<Int(count) {
+        levels.reserveCapacity(levelDescriptorCount)
+        for index in 0..<levelDescriptorCount {
             let offset = 0x10 + index * 0x18
             let logicalOffset = Self.u64(hashData, offset)
             let dataSize = Self.u64(hashData, offset + 8)
