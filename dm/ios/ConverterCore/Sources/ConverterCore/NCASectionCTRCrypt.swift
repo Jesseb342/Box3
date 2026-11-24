@@ -14,6 +14,10 @@ public enum NCASectionCTRCryptError: Error, Equatable {
 public enum NCASectionCTRCrypt {
     /// Applies AES-CTR from an explicit counter. byteOffsetInBlock supports
     /// ranges beginning between AES blocks while retaining the containing counter.
+    ///
+    /// Counter blocks are encrypted in one CommonCrypto ECB operation per input
+    /// buffer. Encrypting each 16-byte counter separately is prohibitively slow
+    /// for multi-megabyte RomFS sections on iPhone CPUs.
     public static func crypt(
         data: Data,
         key: Data,
@@ -31,25 +35,55 @@ public enum NCASectionCTRCrypt {
         }
         guard !data.isEmpty else { return Data() }
 
-        var counter = Array(initialCounter)
-        let input = Array(data)
-        var output = [UInt8](repeating: 0, count: input.count)
-        var inputOffset = 0
-        var skip = byteOffsetInBlock
+        let (totalBytes, sizeOverflow) = data.count.addingReportingOverflow(byteOffsetInBlock)
+        guard !sizeOverflow else { throw NCASectionCTRCryptError.cryptographicFailure(kCCParamError) }
+        let (roundedBytes, roundingOverflow) = totalBytes.addingReportingOverflow(15)
+        guard !roundingOverflow else { throw NCASectionCTRCryptError.cryptographicFailure(kCCParamError) }
+        let blockCount = roundedBytes / 16
+        let (counterByteCount, counterSizeOverflow) = blockCount.multipliedReportingOverflow(by: 16)
+        guard !counterSizeOverflow, counterByteCount <= Int(UInt32.max) else {
+            throw NCASectionCTRCryptError.cryptographicFailure(kCCParamError)
+        }
 
-        while inputOffset < input.count {
-            let stream = Array(try aesEncryptBlock(Data(counter), key: key))
-            let count = min(16 - skip, input.count - inputOffset)
-            for index in 0..<count {
-                output[inputOffset + index] = input[inputOffset + index] ^ stream[skip + index]
+        var counter = Array(initialCounter)
+        var counterBlocks = [UInt8]()
+        counterBlocks.reserveCapacity(counterByteCount)
+        for block in 0..<blockCount {
+            counterBlocks.append(contentsOf: counter)
+            if block + 1 < blockCount, !incrementLow64(&counter) {
+                throw NCASectionCTRCryptError.counterOverflow
             }
-            inputOffset += count
-            skip = 0
-            if inputOffset < input.count {
-                guard incrementLow64(&counter) else {
-                    throw NCASectionCTRCryptError.counterOverflow
+        }
+
+        var keyStream = [UInt8](repeating: 0, count: counterByteCount)
+        var moved: size_t = 0
+        let status: CCCryptorStatus = key.withUnsafeBytes { keyBytes in
+            counterBlocks.withUnsafeBytes { counterBytes in
+                keyStream.withUnsafeMutableBytes { outputBytes in
+                    CCCrypt(
+                        CCOperation(kCCEncrypt),
+                        CCAlgorithm(kCCAlgorithmAES),
+                        CCOptions(kCCOptionECBMode),
+                        keyBytes.baseAddress,
+                        key.count,
+                        nil,
+                        counterBytes.baseAddress,
+                        CC_LONG(counterByteCount),
+                        outputBytes.baseAddress,
+                        CC_LONG(counterByteCount),
+                        &moved
+                    )
                 }
             }
+        }
+        guard status == kCCSuccess, moved == counterByteCount else {
+            throw NCASectionCTRCryptError.cryptographicFailure(status)
+        }
+
+        let input = Array(data)
+        var output = [UInt8](repeating: 0, count: input.count)
+        for index in input.indices {
+            output[index] = input[index] ^ keyStream[byteOffsetInBlock + index]
         }
         return Data(output)
     }
@@ -76,34 +110,6 @@ public enum NCASectionCTRCrypt {
             initialCounter: initialCounter,
             byteOffsetInBlock: Int(absoluteOffset & 0x0F)
         )
-    }
-
-    private static func aesEncryptBlock(_ input: Data, key: Data) throws -> Data {
-        var output = Data(count: 16)
-        var moved: size_t = 0
-        let status: CCCryptorStatus = key.withUnsafeBytes { keyBytes in
-            input.withUnsafeBytes { inputBytes in
-                output.withUnsafeMutableBytes { outputBytes in
-                    CCCrypt(
-                        CCOperation(kCCEncrypt),
-                        CCAlgorithm(kCCAlgorithmAES),
-                        CCOptions(kCCOptionECBMode),
-                        keyBytes.baseAddress,
-                        key.count,
-                        nil,
-                        inputBytes.baseAddress,
-                        16,
-                        outputBytes.baseAddress,
-                        16,
-                        &moved
-                    )
-                }
-            }
-        }
-        guard status == kCCSuccess, moved == 16 else {
-            throw NCASectionCTRCryptError.cryptographicFailure(status)
-        }
-        return output
     }
 
     /// Increment only the low 64-bit NCA block index; never carry into the seed.
