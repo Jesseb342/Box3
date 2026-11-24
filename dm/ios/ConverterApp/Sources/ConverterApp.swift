@@ -216,8 +216,18 @@ private enum ConversionLogStore {
         lock.lock()
         defer { lock.unlock() }
         let timestamp = ISO8601DateFormatter().string(from: Date())
-        let previous = (try? String(contentsOf: logURL, encoding: .utf8)) ?? ""
-        let updated = previous + (previous.isEmpty ? "" : "\n") + "[\(timestamp)] \(message)"
-        try? updated.write(to: logURL, atomically: true, encoding: .utf8)
+        let line = "[\(timestamp)] \(message)\n"
+        let manager = FileManager.default
+        if !manager.fileExists(atPath: logURL.path) {
+            _ = manager.createFile(atPath: logURL.path, contents: nil)
+        }
+        do {
+            let handle = try FileHandle(forWritingTo: logURL)
+            defer { try? handle.close() }
+            try handle.seekToEnd()
+            try handle.write(contentsOf: Data(line.utf8))
+        } catch {
+            // Diagnostics must never interrupt conversion.
+        }
     }
 }
