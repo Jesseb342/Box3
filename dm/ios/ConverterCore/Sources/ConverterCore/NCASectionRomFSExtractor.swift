@@ -137,15 +137,39 @@ public enum NCASectionRomFSExtractor {
                 progress?("RomFS: copying verified image (\(verified.romFSSize) bytes)")
             try input.seek(toOffset: verified.romFSOffset)
                 var copied: UInt64 = 0
+                let diagnosticInterval: UInt64 = 128 * 1024 * 1024
+                var nextDiagnostic = diagnosticInterval
                 while copied < verified.romFSSize {
                     let count = Int(min(UInt64(ioChunkSize), verified.romFSSize - copied))
-                    guard let bytes = try input.read(upToCount: count), bytes.count == count else {
-                        throw NCASectionRomFSExtractorError.truncatedSection
+                    var chunkError: Error?
+                    // Drain Foundation's autorelease pool after every 1 MiB copy.
+                    // FileHandle/Data bridging can otherwise retain temporary buffers
+                    // throughout this 1.57 GB operation on memory-constrained iPhones.
+                    autoreleasepool {
+                        do {
+                            var bytes = Data()
+                            bytes.reserveCapacity(count)
+                            while bytes.count < count {
+                                guard let part = try input.read(upToCount: count - bytes.count),
+                                      !part.isEmpty else {
+                                    throw NCASectionRomFSExtractorError.truncatedSection
+                                }
+                                bytes.append(part)
+                            }
+                            try output.write(contentsOf: bytes)
+                        } catch {
+                            chunkError = error
+                        }
                     }
-                    try output.write(contentsOf: bytes)
+                    if let chunkError { throw chunkError }
                     copied += UInt64(count)
+                    if copied >= nextDiagnostic || copied == verified.romFSSize {
+                        progress?("RomFS: copied \\(copied) / \\(verified.romFSSize) bytes")
+                        nextDiagnostic += diagnosticInterval
+                    }
                 }
                 try output.synchronize()
+                progress?("RomFS: verified image copy complete")
                 try input.close()
                 try output.close()
             } catch {
