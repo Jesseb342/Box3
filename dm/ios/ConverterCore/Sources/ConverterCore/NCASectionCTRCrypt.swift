@@ -70,7 +70,7 @@ public enum NCASectionCTRCrypt {
                         counterBytes.baseAddress,
                         CC_LONG(counterByteCount),
                         outputBytes.baseAddress,
-                        CC_LONG(counterByteCount),
+                        counterByteCount,
                         &moved
                     )
                 }
