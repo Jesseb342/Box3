@@ -77,7 +77,7 @@ public enum NSPMultiPackageRewritePipeline {
             var summaries: [NSPPackageRewriteSummary] = []
             var baseGameProfile: String?
             for input in ordered {
-                progress?("Opening \\(input.role.rawValue) package: \\(input.url.lastPathComponent)")
+                progress?("Opening \(input.role.rawValue) package: \(input.url.lastPathComponent)")
                 let packageOutput = staging.appendingPathComponent(input.role.rawValue, isDirectory: true)
                 let result = try NSPExecutableRewritePipeline.process(
                     nspURL: input.url,
