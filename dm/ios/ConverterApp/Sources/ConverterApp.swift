@@ -23,6 +23,7 @@ private enum ImportTarget: String {
 }
 
 struct ConverterView: View {
+    private let diagnosticBuild = "2026-11-24-aes-ctr-batch"
     @State private var files: [ImportTarget: URL] = [:]
     @State private var activeTarget: ImportTarget?
     @State private var showingImporter = false
@@ -145,6 +146,7 @@ struct ConverterView: View {
         status = "Starting conversion…"
         outputPath = ""
         ConversionLogStore.clear()
+        ConversionLogStore.append("Swapp diagnostic build: \(diagnosticBuild)")
         ConversionLogStore.append("Conversion started. Files: prod.keys and base package; optional update/DLC selected: update=\(files[.update] != nil), DLC=\(files[.dlc] != nil).")
         DispatchQueue.global(qos: .userInitiated).async {
             do {
