@@ -72,7 +72,8 @@ public final class RomFSArchive {
     private static let maxNameBytes = 1_048_576
     private static let ioChunkSize = 1_048_576
 
-    public init(url: URL, offset: UInt64 = 0, size: UInt64? = nil) throws {
+    public init(url: URL, offset: UInt64 = 0, size: UInt64? = nil,
+                progress: ((String) -> Void)? = nil) throws {
         guard url.isFileURL else { throw RomFSError.invalidFileURL }
         let handle = try FileHandle(forReadingFrom: url)
         defer { try? handle.close() }
@@ -127,6 +128,7 @@ public final class RomFSArchive {
             ("file metadata table", parsed.fileOffset, parsed.fileSize),
             ("file data", parsed.dataOffset, regionSize - min(parsed.dataOffset, regionSize))
         ]
+        progress?("RomFS header: dirHash=\\(parsed.dirHashOffset)+\\(parsed.dirHashSize), dirMeta=\\(parsed.dirOffset)+\\(parsed.dirSize), fileHash=\\(parsed.fileHashOffset)+\\(parsed.fileHashSize), fileMeta=\\(parsed.fileOffset)+\\(parsed.fileSize), fileDataOffset=\\(parsed.dataOffset), imageSize=\\(regionSize)")
         var previousEnd: UInt64 = 0x50
         for (name, start, length) in regions {
             let (end, addOverflow) = start.addingReportingOverflow(length)
@@ -137,7 +139,11 @@ public final class RomFSArchive {
                 throw RomFSError.invalidRegion(name)
             }
             if length > 0 {
-                guard start >= previousEnd else { throw RomFSError.overlappingRegions }
+                progress?("RomFS region \\(name): [\\(start), \\(end)); previous region ends at \\(previousEnd)")
+                guard start >= previousEnd else {
+                    progress?("RomFS region overlap: \\(name) starts at \\(start), before previous end \\(previousEnd)")
+                    throw RomFSError.overlappingRegions
+                }
                 previousEnd = end
             }
         }
