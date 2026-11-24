@@ -181,6 +181,7 @@ struct ConverterView: View {
                     isRunning = false
                     let nsError = error as NSError
                     status = "Conversion stopped. \(String(reflecting: error)) [domain: \(nsError.domain), code: \(nsError.code)]"
+                    ConversionLogStore.append(status)
                 }
             }
         }
@@ -214,7 +215,7 @@ private enum ConversionLogStore {
         defer { lock.unlock() }
         let timestamp = ISO8601DateFormatter().string(from: Date())
         let previous = (try? String(contentsOf: logURL, encoding: .utf8)) ?? ""
-        let updated = previous + (previous.isEmpty ? "" : "\\n") + "[\\(timestamp)] \\(message)"
+        let updated = previous + (previous.isEmpty ? "" : "\n") + "[\(timestamp)] \(message)"
         try? updated.write(to: logURL, atomically: true, encoding: .utf8)
     }
 }
