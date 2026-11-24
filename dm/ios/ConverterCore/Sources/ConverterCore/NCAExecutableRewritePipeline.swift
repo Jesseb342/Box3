@@ -69,7 +69,7 @@ public enum NCAExecutableRewritePipeline {
         }
 
         do {
-            progress?("Decrypting and verifying ExeFS section \\(sectionIndex)")
+            progress?("Decrypting and verifying ExeFS section \(sectionIndex)")
             let decryptedURL = staging.appendingPathComponent("decrypted.section")
             _ = try NCASectionStreamDecryptor.decryptSection(
                 inputURL: ncaURL,
