@@ -18,59 +18,14 @@ pub const SPIN_WIN: i64 = 512;
 
 // ---- Function boundaries (eh_frame_hdr) ----
 fn function_starts(img: &[u8], text_end: i64) -> Res<Vec<i64>> {
-    let g32 = |o: i64| -> Res<u32> {
-        img.get(o as usize..o as usize + 4)
-            .map(|b| u32::from_le_bytes(b.try_into().unwrap()))
-            .ok_or_else(|| Fail::new("short read"))
-    };
-    let m0 = g32(4)? as i64;
-    if img.get(m0 as usize..m0 as usize + 4) != Some(b"MOD0") {
-        return Err(Fail::new("assert IMG[m0:m0 + 4] == b'MOD0'"));
-    }
-    let ehs = m0 + g32(m0 + 16)? as i32 as i64;
-    let rd = |o: i64, enc: u8| -> Res<(i64, i64)> {
-        let (fmt, app) = (enc & 0xF, enc & 0x70);
-        let (mut v, sz) = match fmt {
-            0x3 => (g32(o)? as i64, 4),
-            0xB => (g32(o)? as i32 as i64, 4),
-            0x4 => (
-                img.get(o as usize..o as usize + 8)
-                    .map(|b| u64::from_le_bytes(b.try_into().unwrap()) as i64)
-                    .ok_or_else(|| Fail::new("short read"))?,
-                8,
-            ),
-            _ => return Err(Fail::new(format!(
-                "unsupported eh_frame_hdr pointer encoding: format={fmt} full_encoding={enc:#04x} image_offset={o:#x}"
-            ))),
-        };
-        if app == 0x10 {
-            v += o;
-        }
-        if app == 0x30 {
-            v += ehs;
-        }
-        Ok((v, sz))
-    };
-    let h = img
-        .get(ehs as usize..ehs as usize + 4)
-        .ok_or_else(|| Fail::new("short read"))?;
-    let (penc, cenc, tenc) = (h[1], h[2], h[3]);
-    let mut o = ehs + 4;
-    let (_, s) = rd(o, penc)?;
-    o += s;
-    let (nfde, s) = rd(o, cenc)?;
-    o += s;
-    let mut starts: Vec<i64> = Vec::new();
-    for _ in 0..nfde {
-        let (a, s) = rd(o, tenc)?;
-        o += s;
-        let (_, s) = rd(o, tenc)?;
-        o += s;
-        starts.push(a);
-    }
-    starts.sort();
+    let table = crate::fde::fde_table(img).map_err(Fail::new)?;
+    let mut starts: Vec<i64> = table
+        .into_iter()
+        .map(|(start, _)| start)
+        .filter(|&start| start >= 0 && start < text_end)
+        .collect();
+    starts.sort_unstable();
     starts.dedup();
-    starts.retain(|&x| x < text_end);
     Ok(starts)
 }
 
