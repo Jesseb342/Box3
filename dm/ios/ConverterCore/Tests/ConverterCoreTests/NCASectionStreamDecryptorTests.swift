@@ -27,6 +27,35 @@ final class NCASectionStreamDecryptorTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: fixture.inputURL), fixture.encryptedFile)
     }
 
+    func testCopiesUnencryptedSectionWithoutKeyMaterial() throws {
+        let fixture = try makeFixture(encryption: .none)
+        defer { try? FileManager.default.removeItem(at: fixture.inputURL) }
+        let output = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: output) }
+
+        let count = try NCASectionStreamDecryptor.decryptSection(
+            inputURL: fixture.inputURL,
+            outputURL: output,
+            section: fixture.section,
+            fileSystemHeader: fixture.fileSystemHeader,
+            key: Data(),
+            chunkSize: 0x523
+        )
+        XCTAssertEqual(count, UInt64(fixture.plainSection.count))
+        XCTAssertEqual(try Data(contentsOf: output), fixture.plainSection)
+
+        let integratedOutput = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: integratedOutput) }
+        let keys = try ProdKeys(text: "")
+        let integratedCount = try NCASectionStreamDecryptor.decryptSection(
+            inputURL: fixture.inputURL, outputURL: integratedOutput,
+            inspection: fixture.inspection, section: fixture.section, keys: keys,
+            chunkSize: 0x523
+        )
+        XCTAssertEqual(integratedCount, UInt64(fixture.plainSection.count))
+        XCTAssertEqual(try Data(contentsOf: integratedOutput), fixture.plainSection)
+    }
+
     func testIntegratedPathResolvesKeyAreaKeyAndDecryptsInspectedSection() throws {
         let fixture = try makeFixture(encryption: .aesCTR)
         defer { try? FileManager.default.removeItem(at: fixture.inputURL) }
@@ -64,7 +93,7 @@ final class NCASectionStreamDecryptorTests: XCTestCase {
     }
 
     func testRejectsUnsupportedEncryptionModesBeforeCreatingOutput() throws {
-        for mode in [NCAFileSystemHeader.EncryptionType.aesXTS, .aesCTREx, .aesCTRSkipLayerHash, .aesCTRExSkipLayerHash, .automatic, .none] {
+        for mode in [NCAFileSystemHeader.EncryptionType.aesXTS, .aesCTREx, .aesCTRSkipLayerHash, .aesCTRExSkipLayerHash, .automatic] {
             let fixture = try makeFixture(encryption: mode)
             defer { try? FileManager.default.removeItem(at: fixture.inputURL) }
             let output = temporaryURL()
@@ -205,10 +234,15 @@ final class NCASectionStreamDecryptorTests: XCTestCase {
         )
 
         let plainSection = Data((0..<Int(sectionSize)).map { UInt8(($0 * 31 + 7) & 0xFF) })
-        let encryptedSection = try NCASectionCTRCrypt.crypt(
-            data: plainSection, key: sectionKey, sectionCounter: seed,
-            sectionFileOffset: sectionOffset, offsetWithinSection: 0
-        )
+        let encryptedSection: Data
+        if encryption == .none {
+            encryptedSection = plainSection
+        } else {
+            encryptedSection = try NCASectionCTRCrypt.crypt(
+                data: plainSection, key: sectionKey, sectionCounter: seed,
+                sectionFileOffset: sectionOffset, offsetWithinSection: 0
+            )
+        }
         var encryptedFile = Data(repeating: 0xCC, count: fileSize)
         encryptedFile.replaceSubrange(Int(sectionOffset)..<fileSize, with: encryptedSection)
         let inputURL = temporaryURL()
