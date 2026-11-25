@@ -97,7 +97,7 @@ public enum NSPExecutableRewritePipeline {
                     switch fsHeader.fileSystemType {
                     case .partitionFS:
                         guard fsHeader.hashType == .hierarchicalSHA256,
-                              fsHeader.encryptionType == .aesCTR else {
+                              fsHeader.encryptionType == .aesCTR || fsHeader.encryptionType == .none else {
                             throw NSPExecutableRewritePipelineError.unsupportedProgramSection(
                                 sectionIndex: section.index,
                                 fileSystemType: fsHeader.fileSystemType,
