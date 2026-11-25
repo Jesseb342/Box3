@@ -48,7 +48,7 @@ public enum NCAExecutableRewritePipeline {
         guard fsHeader.fileSystemType == .partitionFS else {
             throw NCAExecutableRewritePipelineError.sectionIsNotPartitionFS(sectionIndex)
         }
-        guard fsHeader.encryptionType == .aesCTR else {
+        guard fsHeader.encryptionType == .aesCTR || fsHeader.encryptionType == .none else {
             throw NCAExecutableRewritePipelineError.unsupportedSectionEncryption(sectionIndex)
         }
 
