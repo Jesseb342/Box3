@@ -121,31 +121,50 @@ public final class RomFSArchive {
             dataOffset: u64(rawHeader, 72)
         )
 
-        let regions: [(String, UInt64, UInt64)] = [
+        let metadataRegions: [(String, UInt64, UInt64)] = [
             ("directory hash table", parsed.dirHashOffset, parsed.dirHashSize),
             ("directory metadata table", parsed.dirOffset, parsed.dirSize),
             ("file hash table", parsed.fileHashOffset, parsed.fileHashSize),
-            ("file metadata table", parsed.fileOffset, parsed.fileSize),
-            ("file data", parsed.dataOffset, regionSize - min(parsed.dataOffset, regionSize))
+            ("file metadata table", parsed.fileOffset, parsed.fileSize)
         ]
         progress?("RomFS header: dirHash=\(parsed.dirHashOffset)+\(parsed.dirHashSize), dirMeta=\(parsed.dirOffset)+\(parsed.dirSize), fileHash=\(parsed.fileHashOffset)+\(parsed.fileHashSize), fileMeta=\(parsed.fileOffset)+\(parsed.fileSize), fileDataOffset=\(parsed.dataOffset), imageSize=\(regionSize)")
-        var previousEnd: UInt64 = 0x50
-        for (name, start, length) in regions {
+        var orderedRegions: [(String, UInt64, UInt64)] = []
+        for (name, start, length) in metadataRegions {
             let (end, addOverflow) = start.addingReportingOverflow(length)
             guard !addOverflow, start >= 0x50, end <= regionSize else {
                 throw RomFSError.invalidRegion(name)
             }
-            guard length > 0 || name == "file data" || (name == "file metadata table" && parsed.fileSize == 0) else {
+            guard length > 0 || (name == "file metadata table" && parsed.fileSize == 0) else {
                 throw RomFSError.invalidRegion(name)
             }
-            if length > 0 {
-                progress?("RomFS region \(name): [\(start), \(end)); previous region ends at \(previousEnd)")
-                guard start >= previousEnd else {
-                    progress?("RomFS region overlap: \(name) starts at \(start), before previous end \(previousEnd)")
-                    throw RomFSError.overlappingRegions
-                }
-                previousEnd = end
+            if length > 0 { orderedRegions.append((name, start, length)) }
+        }
+        guard parsed.dataOffset >= 0x50, parsed.dataOffset <= regionSize else {
+            throw RomFSError.invalidRegion("file data")
+        }
+        // RomFS permits the file-data area to appear before the metadata tables
+        // or after them. Its end is the next metadata region boundary, not
+        // necessarily the end of the entire image.
+        let dataRegionEnd = orderedRegions
+            .filter { $0.1 > parsed.dataOffset }
+            .map { $0.1 }
+            .min() ?? regionSize
+        guard dataRegionEnd >= parsed.dataOffset else {
+            throw RomFSError.invalidRegion("file data")
+        }
+        let dataRegionSize = dataRegionEnd - parsed.dataOffset
+        orderedRegions.append(("file data", parsed.dataOffset, dataRegionSize))
+        orderedRegions.sort { $0.1 < $1.1 }
+        var previousEnd: UInt64 = 0x50
+        for (name, start, length) in orderedRegions {
+            let (end, addOverflow) = start.addingReportingOverflow(length)
+            guard !addOverflow, end <= regionSize else { throw RomFSError.invalidRegion(name) }
+            progress?("RomFS region \(name): [\(start), \(end)); previous region ends at \(previousEnd)")
+            guard start >= previousEnd else {
+                progress?("RomFS region overlap: \(name) starts at \(start), before previous end \(previousEnd)")
+                throw RomFSError.overlappingRegions
             }
+            previousEnd = end
         }
         guard parsed.dirHashSize % 4 == 0, parsed.fileHashSize % 4 == 0 else {
             throw RomFSError.invalidRegion("hash table alignment")
@@ -214,7 +233,7 @@ public final class RomFSArchive {
             let dataOffset = Self.readU64(raw, 8)
             let dataLength = Self.readU64(raw, 16)
             let (dataEnd, dataOverflow) = dataOffset.addingReportingOverflow(dataLength)
-            let dataRegionSize = regionSize - parsed.dataOffset
+            let dataRegionSize = dataRegionEnd - parsed.dataOffset
             guard !dataOverflow, dataEnd <= dataRegionSize else {
                 throw RomFSError.fileDataOutOfBounds(name)
             }
