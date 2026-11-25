@@ -46,7 +46,7 @@ final class NCASectionStreamDecryptorTests: XCTestCase {
 
         let integratedOutput = temporaryURL()
         defer { try? FileManager.default.removeItem(at: integratedOutput) }
-        let keys = try ProdKeys(text: "")
+        let keys = try ProdKeys(text: "header_key=\(hex(Data(repeating: 0, count: 32)))")
         let integratedCount = try NCASectionStreamDecryptor.decryptSection(
             inputURL: fixture.inputURL, outputURL: integratedOutput,
             inspection: fixture.inspection, section: fixture.section, keys: keys,
