@@ -52,10 +52,11 @@ public enum NCASectionStreamDecryptor {
                 expected: section.index, actual: fileSystemHeader.sectionIndex
             )
         }
-        guard fileSystemHeader.encryptionType == .aesCTR else {
+        guard fileSystemHeader.encryptionType == .aesCTR || fileSystemHeader.encryptionType == .none else {
             throw NCASectionStreamDecryptorError.unsupportedEncryptionType(fileSystemHeader.encryptionType)
         }
-        guard key.count == 16 || key.count == 32 else {
+        if fileSystemHeader.encryptionType == .aesCTR,
+           key.count != 16 && key.count != 32 {
             throw NCASectionCTRCryptError.invalidAESKeyLength(key.count)
         }
 
@@ -93,13 +94,20 @@ public enum NCASectionStreamDecryptor {
                     )
                 }
 
-                let clear = try NCASectionCTRCrypt.crypt(
-                    data: chunk,
-                    key: key,
-                    sectionCounter: fileSystemHeader.sectionCounter,
-                    sectionFileOffset: sectionOffset,
-                    offsetWithinSection: offsetWithinSection
-                )
+                let clear: Data
+                if fileSystemHeader.encryptionType == .none {
+                    // Unencrypted PartitionFS sections still require their
+                    // hierarchical SHA-256 verification, but no cipher transform.
+                    clear = chunk
+                } else {
+                    clear = try NCASectionCTRCrypt.crypt(
+                        data: chunk,
+                        key: key,
+                        sectionCounter: fileSystemHeader.sectionCounter,
+                        sectionFileOffset: sectionOffset,
+                        offsetWithinSection: offsetWithinSection
+                    )
+                }
                 try output.write(contentsOf: clear)
                 offsetWithinSection += UInt64(requested)
             }
@@ -131,6 +139,17 @@ public enum NCASectionStreamDecryptor {
             throw NCASectionStreamDecryptorError.sectionNotInInspection(section.index)
         }
         let fileSystemHeader = try inspection.fileSystemHeader(for: verifiedSection)
+        let fsHeader = try inspection.fileSystemHeader(for: verifiedSection)
+        if fsHeader.encryptionType == .none {
+            return try decryptSection(
+                inputURL: inputURL,
+                outputURL: outputURL,
+                section: verifiedSection,
+                fileSystemHeader: fsHeader,
+                key: Data(),
+                chunkSize: chunkSize
+            )
+        }
         let sectionKey: Data
         if inspection.header.usesTitleKeyCrypto {
             guard let titleKeys else {
